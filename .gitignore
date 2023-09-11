@@ -1,0 +1,48 @@
+# Ignore system and IDE files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+desktop.ini
+
+# Ignore build and compiled files
+node_modules/
+build/
+dist/
+*.log
+npm-debug.log*
+
+# Ignore configuration files
+.env
+.env.local
+
+# Ignore dependencies lock files
+yarn.lock
+package-lock.json
+
+# Ignore generated files and directories
+public/
+uploads/
+
+# Ignore sensitive or personal files
+config.js
+secrets.json
+
+# Ignore IDE-specific files
+*.suo
+*.sln
+*.user
+*.suo
+
+# Ignore temporary files
+*.tmp
+*.temp
+
+# Ignore backup files
+*~
+
+# Ignore cache and log files
+.cache/
+logs/
+.pytest_cache/
+**/__pycache__/

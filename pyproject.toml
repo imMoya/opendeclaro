@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "opendeclaro"
+version = "0.1.0"
+description = ""
+authors = ["Ignacio Moya <imoyared@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+polars = "^0.19.2"
+numpy = "^1.25.2"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^5.2"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.9.1"
+isort = "^5.12.0"
+commitizen = "^3.8.2"
+flake8 = "^6.1.0"
+pre-commit = "^3.4.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
