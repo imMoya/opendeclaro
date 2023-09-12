@@ -41,6 +41,9 @@ secrets.json
 # Ignore backup files
 *~
 
+# Ignore dataset file
+Account.csv
+
 # Ignore cache and log files
 .cache/
 logs/
