@@ -44,6 +44,9 @@ secrets.json
 # Ignore dataset file
 Account.csv
 
+# Ignore jupyter notebooks where personal data may be stored
+**/notebooks/
+
 # Ignore cache and log files
 .cache/
 logs/
