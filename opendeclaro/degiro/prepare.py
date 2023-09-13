@@ -16,6 +16,7 @@ class Dataset:
         """
         self.data = pl.read_csv(path)
         self.data_cols = dict(zip(config.cols_list, self.data.columns))
+        self.data = self.type_converter().with_row_count()
 
     def type_converter(self):
         """Converts types of columns to appropiate format"""
@@ -33,4 +34,4 @@ class Dataset:
             pl.col(self.data_cols["cash"]).str.replace(",", ".").cast(pl.Float32, strict=False),
             pl.col(self.data_cols["id_order"]),
         )
-        print(out)
+        return out
