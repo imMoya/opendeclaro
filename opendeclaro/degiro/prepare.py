@@ -1,8 +1,10 @@
 """prepare.py classes and functions"""
 from dataclasses import dataclass
 
-import config
+import pl.internals.dataframe.frame.DataFrame as pl_DataFrame
 import polars as pl
+
+import opendeclaro.degiro.config as config
 
 
 class Dataset:
@@ -20,7 +22,7 @@ class Dataset:
         self.data = self.drop_orphan_rows()
         self.data = self.split_description()
 
-    def type_converter(self):
+    def type_converter(self) -> pl_DataFrame:
         """Convert types of columns to appropiate format"""
         return self.data.select(
             pl.col(self.data_cols["reg_date"]).str.strptime(pl.Datetime),
@@ -37,11 +39,11 @@ class Dataset:
             pl.col(self.data_cols["id_order"]),
         )
 
-    def drop_orphan_rows(self):
+    def drop_orphan_rows(self) -> pl_DataFrame:
         """Drop orphan rows where no date data is available"""
         return self.data.filter(pl.col(self.data_cols["reg_date"]) != None)
 
-    def split_description(self):
+    def split_description(self) -> pl_DataFrame:
         """Apply split_and_transform method to description column of data and update data_cols with new column names"""
         self.data_cols.update(
             dict(zip(["action", "number", "price", "pricecur"], ["action", "number", "price", "pricecur"]))
