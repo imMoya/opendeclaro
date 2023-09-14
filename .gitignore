@@ -45,6 +45,7 @@ secrets.json
 Account.csv
 
 # Ignore jupyter notebooks where personal data may be stored
+.ipynb_checkpoints
 **/notebooks/
 
 # Ignore cache and log files
