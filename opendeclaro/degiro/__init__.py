@@ -1,2 +1,2 @@
-from opendeclaro.degiro.config import cols_list
-from opendeclaro.degiro.prepare import Dataset
+from degiro import config
+from degiro.prepare import Dataset
