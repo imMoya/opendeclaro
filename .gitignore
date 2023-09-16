@@ -44,6 +44,7 @@ secrets.json
 # Ignore dataset file
 Account.csv
 U8*csv
+Account*csv
 
 # Ignore jupyter notebooks where personal data may be stored
 .ipynb_checkpoints

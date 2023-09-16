@@ -1,6 +1,4 @@
-"""prepare.py classes and functions"""
-from dataclasses import dataclass
-
+"""prepare.py classes and functions for degiro"""
 import degiro.config as config
 import polars as pl
 from polars import DataFrame
