@@ -18,13 +18,14 @@ class Dataset:
         self.data = self.type_converter()
         self.data = self.drop_orphan_rows()
         self.data = self.split_description()
+        self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
 
     def type_converter(self) -> DataFrame:
         """Convert types of columns to appropiate format"""
         return self.data.select(
             pl.col(self.data_cols["reg_date"]).str.strptime(pl.Datetime),
             pl.col(self.data_cols["reg_hour"]).str.strptime(pl.Datetime, "%H:%M"),
-            pl.col(self.data_cols["value_date"]),
+            pl.col(self.data_cols["value_date"]).str.strptime(pl.Datetime),
             pl.col(self.data_cols["product"]),
             pl.col(self.data_cols["isin"]),
             pl.col(self.data_cols["desc"]),
