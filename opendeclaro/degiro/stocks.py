@@ -18,22 +18,41 @@ class Stocks:
         self.end_date = end_date
 
     def return_on_stock(self, stock: str) -> DataFrame:
+        # fmt: off
+        
         df = self.data.filter(pl.col(["product"]) == stock)
+        
+        # filter start_date and end_date
         if self.start_date is not None:
             df = df.filter(pl.col("value_date") >= self.start_date)
         if self.end_date is not None:
             df = df.filter(pl.col("value_data") <= self.end_date)
-        df = df.with_columns(
-            (pl.col("number") * pl.col("price")).alias("amount"),
-            (pl.lit(False).alias("conflict_2m")),
-        ).sort("value_date")
+        
+        # create additional columns to df: "amount" "conflict_2m"
+        df = (
+            df
+            .with_columns(
+                (pl.col("number") * pl.col("price")).alias("amount"),
+                (pl.lit(False).alias("conflict_2m")),
+            ).sort("value_date")
+        )
+
+        # start iterating through sales of stock
         for row in df.filter(pl.col("action") == "sell").select("id_order").iter_rows():
+            # compute sell 
             sale_df = df.filter(pl.col("id_order") == row[0])
-            auxsell_df = df.filter((pl.col("id_order") == row[0]) & (pl.col("action") == "sell")).with_columns(
-                pl.col("number").alias("shares_effective")
+            auxsell_df = (
+                df
+                .filter(
+                    (pl.col("id_order") == row[0]) & 
+                    (pl.col("action") == "sell")
+                    )
+                .with_columns(pl.col("number").alias("shares_effective"))
             )
-            sale_df = sale_df.select(pl.all().exclude("number")).join(
-                auxsell_df.select(["id_order", "number", "shares_effective"]), on="id_order", how="outer"
+            sale_df = (
+                sale_df
+                .select(pl.all().exclude("number"))
+                .join(auxsell_df.select(["id_order", "number", "shares_effective"]), on="id_order", how="outer")
             )
             shares_sold = df.filter(pl.col("id_order") == row[0]).select(pl.sum("number"))
             buy_orders = df.filter(pl.col("action") == "buy").select("id_order").to_series()
@@ -49,8 +68,11 @@ class Stocks:
                 )
             )
             buy_df = df.filter(pl.col("id_order").is_in(auxbuy_df.select("id_order").to_series()))
-            buy_df = buy_df.select(pl.all().exclude("number")).join(
-                auxbuy_df.select(["id_order", "shares_effective", "number"]), on="id_order", how="inner"
+            buy_df = (
+                buy_df
+                .select(pl.all().exclude("number"))
+                .join(auxbuy_df.select(["id_order", "shares_effective", "number"]), on="id_order", how="inner")
             )
             all_df = pl.concat([sale_df, buy_df], how="diagonal")
             return_sale = all_df.select((pl.col("var") * pl.col("shares_effective") / pl.col("number"))).sum()
+        # fmt: on
