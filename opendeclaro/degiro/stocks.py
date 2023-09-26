@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Optional
 
 import polars as pl
@@ -19,6 +20,8 @@ class Stocks:
 
     def return_on_stock(self, stock: str) -> DataFrame:
         # fmt: off
+
+        return_global = 0
         
         df = self.data.filter(pl.col(["product"]) == stock)
         
@@ -27,20 +30,28 @@ class Stocks:
             df = df.filter(pl.col("value_date") >= self.start_date)
         if self.end_date is not None:
             df = df.filter(pl.col("value_data") <= self.end_date)
-        
-        # create additional columns to df: "amount" "conflict_2m"
-        df = (
-            df
-            .with_columns(
-                (pl.col("number") * pl.col("price")).alias("amount"),
-                (pl.lit(False).alias("conflict_2m")),
-            ).sort("value_date")
-        )
 
         # start iterating through sales of stock
         for row in df.filter(pl.col("action") == "sell").select("id_order").iter_rows():
-            # compute sell 
             sale_df = df.filter(pl.col("id_order") == row[0])
+
+            # add column of possible two month limit restriction
+            date_sale = sale_df.filter(pl.col("action")=="sell").select(pl.col("value_date")).item()
+            date_2m_limit = date_sale + timedelta(days=60)
+            sale_df = (
+                df
+                .with_columns(
+                    pl.when(
+                        (pl.col("value_date") < date_2m_limit) & 
+                        (pl.col("value_date") > date_sale))
+                    .then(False)
+                    .otherwise(True)
+                    .alias("two_month_violation")
+                )
+                .filter(pl.col("id_order") == row[0])
+            )
+
+            # compute sell 
             auxsell_df = (
                 df
                 .filter(
@@ -74,5 +85,16 @@ class Stocks:
                 .join(auxbuy_df.select(["id_order", "shares_effective", "number"]), on="id_order", how="inner")
             )
             all_df = pl.concat([sale_df, buy_df], how="diagonal")
-            return_sale = all_df.select((pl.col("var") * pl.col("shares_effective") / pl.col("number"))).sum()
+            return_sale = (
+                all_df
+                .select(
+                    (pl.col("var") * pl.col("shares_effective") / pl.col("number"))
+                )
+                .sum()
+                .item()
+            )
+            if (return_sale < 0) & (sale_df.select("two_month_violation")[0].item() == True):
+                pass
+            else:
+                return_global += return_sale
         # fmt: on
