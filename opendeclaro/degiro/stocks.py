@@ -6,6 +6,25 @@ from degiro.prepare import Dataset
 from polars import DataFrame
 
 
+class SaleOfStock:
+    def __init__(self, df: DataFrame, stock: str, id_order: str):
+        self.df = df
+        self.stock = stock
+        self.id_order = id_order
+
+    @property
+    def sale_df(self):
+        return self.df.filter((pl.col("id_order") == self.id_order) & (pl.col("product") == self.stock))
+
+    @property
+    def date_sale(self):
+        return self.sale_df.filter(pl.col("action") == "sell").select(pl.col("value_date")).item()
+
+    @property
+    def date_two_month_lim(self):
+        return self.date_sale + timedelta(days=60)
+
+
 class Stocks:
     def __init__(
         self,
@@ -29,7 +48,7 @@ class Stocks:
         self.start_date = start_date
         self.end_date = end_date
 
-    def return_on_stock(self, stock: str) -> DataFrame:
+    def return_on_stock(self, stock: str) -> float:
         # fmt: off
 
         return_global = 0
