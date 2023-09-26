@@ -13,6 +13,17 @@ class Stocks:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ):
+        """Initialise class
+
+        Parameters
+        ----------
+        path : str
+            path location of dataset csv
+        start_date : Optional[str], optional
+            starting date to filter dataframe, by default None
+        end_date : Optional[str], optional
+            ending date to filter dataframe, by default None
+        """
         self.path = path
         self.data = Dataset(path).data
         self.start_date = start_date
@@ -93,8 +104,11 @@ class Stocks:
                 .sum()
                 .item()
             )
+
             if (return_sale < 0) & (sale_df.select("two_month_violation")[0].item() == True):
                 pass
             else:
                 return_global += return_sale
+        
+        return return_global
         # fmt: on
