@@ -48,6 +48,15 @@ class SaleOfStock:
                 .select(["id_order", "number", "shares_effective"]), on="id_order", how="outer"
             )
         )
+    
+    @property
+    def shares_sold(self):
+        return (
+            self.df
+            .filter(pl.col("id_order") == self.id_order)
+            .select(pl.sum("number"))
+            .item()
+        )
 
     def raw_sale_df(self):
         return (
@@ -62,11 +71,47 @@ class SaleOfStock:
         return (
             self.df
             .filter(
-                (pl.col("id_order") == row[0]) &
+                (pl.col("id_order") == self.id_order) &
                 (pl.col("action") == "sell")
             )
             .with_columns(
                 pl.col("number")
+                .alias("shares_effective")
+            )
+        )
+
+    # fmt: on
+
+
+class PurchaseOfStock(SaleOfStock):
+    def __init__(self, df: DataFrame, stock: str, id_order: str):
+        super().__init__(df, stock, id_order)
+        self._aux_purchase_df = self.aux_purchase_df()
+
+    # fmt: off
+
+    @property
+    def buy_orders(self):
+        return (
+            self.df.
+            filter(
+                (pl.col("action") == "buy") &
+                (pl.col("product") == self.stock)
+            )
+            .select("id_order")
+            .to_series()
+        )
+    
+    def aux_purchase_df(self):
+        return (
+            self.df
+            .filter(pl.col("id_order").is_in(self.buy_orders))
+            .with_columns(pl.cumsum("number").sub(self.shares_sold).sub(pl.col("number")).alias("pending"))
+            .filter(pl.col("pending") <= 0)
+            .with_columns(
+                pl.when(abs(pl.col("pending")) > pl.col("number"))
+                .then(pl.col("number"))
+                .otherwise(abs(pl.col("pending")))
                 .alias("shares_effective")
             )
         )
