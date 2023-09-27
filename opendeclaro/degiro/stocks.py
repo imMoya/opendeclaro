@@ -11,18 +11,67 @@ class SaleOfStock:
         self.df = df
         self.stock = stock
         self.id_order = id_order
+        self._raw_sale_df = self.raw_sale_df()
+        self._aux_sale_df = self.aux_sale_df()
 
-    @property
-    def sale_df(self):
-        return self.df.filter((pl.col("id_order") == self.id_order) & (pl.col("product") == self.stock))
+    # fmt: off
 
     @property
     def date_sale(self):
-        return self.sale_df.filter(pl.col("action") == "sell").select(pl.col("value_date")).item()
+        return (
+            self._raw_sale_df
+            .filter(pl.col("action") == "sell")
+            .select(pl.col("value_date")).item()
+        )
 
     @property
     def date_two_month_lim(self):
         return self.date_sale + timedelta(days=60)
+
+    @property
+    def sale_df(self):
+        _sale_df = (
+            self.df
+            .with_columns(
+                pl.when((pl.col("value_date") < self.date_two_month_lim) & (pl.col("value_date") > self.date_sale))
+                .then(False)
+                .otherwise(True)
+                .alias("two_month_violation")
+            )
+            .filter(pl.col("id_order") == self.id_order)
+        )
+        return (
+            _sale_df
+            .select(pl.all().exclude("number"))
+            .join(
+                self._aux_sale_df
+                .select(["id_order", "number", "shares_effective"]), on="id_order", how="outer"
+            )
+        )
+
+    def raw_sale_df(self):
+        return (
+            self.df
+            .filter(
+                (pl.col("id_order") == self.id_order) & 
+                (pl.col("product") == self.stock)
+            )
+        )
+
+    def aux_sale_df(self):
+        return (
+            self.df
+            .filter(
+                (pl.col("id_order") == row[0]) &
+                (pl.col("action") == "sell")
+            )
+            .with_columns(
+                pl.col("number")
+                .alias("shares_effective")
+            )
+        )
+
+    # fmt: on
 
 
 class Stocks:
@@ -50,11 +99,10 @@ class Stocks:
 
     def return_on_stock(self, stock: str) -> float:
         # fmt: off
-
         return_global = 0
-        
+
         df = self.data.filter(pl.col(["product"]) == stock)
-        
+
         # filter start_date and end_date
         if self.start_date is not None:
             df = df.filter(pl.col("value_date") >= self.start_date)
@@ -66,34 +114,21 @@ class Stocks:
             sale_df = df.filter(pl.col("id_order") == row[0])
 
             # add column of possible two month limit restriction
-            date_sale = sale_df.filter(pl.col("action")=="sell").select(pl.col("value_date")).item()
+            date_sale = sale_df.filter(pl.col("action") == "sell").select(pl.col("value_date")).item()
             date_2m_limit = date_sale + timedelta(days=60)
-            sale_df = (
-                df
-                .with_columns(
-                    pl.when(
-                        (pl.col("value_date") < date_2m_limit) & 
-                        (pl.col("value_date") > date_sale))
-                    .then(False)
-                    .otherwise(True)
-                    .alias("two_month_violation")
-                )
-                .filter(pl.col("id_order") == row[0])
-            )
+            sale_df = df.with_columns(
+                pl.when((pl.col("value_date") < date_2m_limit) & (pl.col("value_date") > date_sale))
+                .then(False)
+                .otherwise(True)
+                .alias("two_month_violation")
+            ).filter(pl.col("id_order") == row[0])
 
-            # compute sell 
-            auxsell_df = (
-                df
-                .filter(
-                    (pl.col("id_order") == row[0]) & 
-                    (pl.col("action") == "sell")
-                    )
-                .with_columns(pl.col("number").alias("shares_effective"))
+            # compute sell
+            auxsell_df = df.filter((pl.col("id_order") == row[0]) & (pl.col("action") == "sell")).with_columns(
+                pl.col("number").alias("shares_effective")
             )
-            sale_df = (
-                sale_df
-                .select(pl.all().exclude("number"))
-                .join(auxsell_df.select(["id_order", "number", "shares_effective"]), on="id_order", how="outer")
+            sale_df = sale_df.select(pl.all().exclude("number")).join(
+                auxsell_df.select(["id_order", "number", "shares_effective"]), on="id_order", how="outer"
             )
             shares_sold = df.filter(pl.col("id_order") == row[0]).select(pl.sum("number"))
             buy_orders = df.filter(pl.col("action") == "buy").select("id_order").to_series()
@@ -109,25 +144,16 @@ class Stocks:
                 )
             )
             buy_df = df.filter(pl.col("id_order").is_in(auxbuy_df.select("id_order").to_series()))
-            buy_df = (
-                buy_df
-                .select(pl.all().exclude("number"))
-                .join(auxbuy_df.select(["id_order", "shares_effective", "number"]), on="id_order", how="inner")
+            buy_df = buy_df.select(pl.all().exclude("number")).join(
+                auxbuy_df.select(["id_order", "shares_effective", "number"]), on="id_order", how="inner"
             )
             all_df = pl.concat([sale_df, buy_df], how="diagonal")
-            return_sale = (
-                all_df
-                .select(
-                    (pl.col("var") * pl.col("shares_effective") / pl.col("number"))
-                )
-                .sum()
-                .item()
-            )
+            return_sale = all_df.select((pl.col("var") * pl.col("shares_effective") / pl.col("number"))).sum().item()
 
             if (return_sale < 0) & (sale_df.select("two_month_violation")[0].item() == True):
                 pass
             else:
                 return_global += return_sale
-        
+
         return return_global
         # fmt: on
