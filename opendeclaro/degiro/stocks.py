@@ -3,7 +3,7 @@ from typing import Optional
 
 import polars as pl
 from degiro.prepare import Dataset
-from polars import DataFrame
+from polars import DataFrame, Series
 
 
 class SaleOfStock:
@@ -87,6 +87,7 @@ class PurchaseOfStock(SaleOfStock):
     def __init__(self, df: DataFrame, stock: str, id_order: str):
         super().__init__(df, stock, id_order)
         self._aux_purchase_df = self.aux_purchase_df()
+        self._raw_purchase_df = self.raw_purchase_df()
 
     # fmt: off
 
@@ -102,7 +103,18 @@ class PurchaseOfStock(SaleOfStock):
             .to_series()
         )
     
-    def aux_purchase_df(self):
+    @property
+    def purchase_df(self) -> DataFrame:
+        return (
+            self._raw_purchase_df
+            .select(pl.all().exclude("number"))
+            .join(
+                self._aux_purchase_df.select(["id_order", "shares_effective", "number"]), on="id_order", how="inner"
+            )
+        )
+
+    
+    def aux_purchase_df(self) -> DataFrame:
         return (
             self.df
             .filter(pl.col("id_order").is_in(self.buy_orders))
@@ -113,6 +125,15 @@ class PurchaseOfStock(SaleOfStock):
                 .then(pl.col("number"))
                 .otherwise(abs(pl.col("pending")))
                 .alias("shares_effective")
+            )
+        )
+    
+    def raw_purchase_df(self) -> DataFrame:
+        return(
+            self.df
+            .filter(
+                pl.col("id_order")
+                .is_in(self._aux_purchase_df.select("id_order").to_series())
             )
         )
 
