@@ -47,7 +47,7 @@ class Dataset:
             dict(zip(["action", "number", "price", "pricecur"], ["action", "number", "price", "pricecur"]))
         )
         return self.data.with_columns(
-            pl.col(self.data_cols["desc"]).apply(self.split_and_transform).alias("result")
+            pl.col(self.data_cols["desc"]).map_elements(self.split_and_transform).alias("result")
         ).unnest("result")
 
     @staticmethod
