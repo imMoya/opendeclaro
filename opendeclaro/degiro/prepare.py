@@ -16,9 +16,9 @@ class Dataset:
         self.data = pl.read_csv(path)
         self.data_cols = dict(zip(config.cols_list, self.data.columns))
         self.data = self.type_converter()
-        self.data = self.drop_orphan_rows()
         self.data = self.split_description()
         self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
+        self.data = self.handle_orphan_rows()
 
     def type_converter(self) -> DataFrame:
         """Convert types of columns to appropiate format"""
@@ -40,6 +40,20 @@ class Dataset:
     def drop_orphan_rows(self) -> DataFrame:
         """Drop orphan rows where no date data is available"""
         return self.data.filter(pl.col(self.data_cols["reg_date"]) != None)
+
+    def handle_orphan_rows(self) -> DataFrame:
+        """Handle orphan rows where no date data is available"""
+        orphan_data = self.replace_null_str(self.data.with_row_count().filter(pl.col("reg_date").is_null()))
+        mapping = {i: i - 1 for i in orphan_data.select(pl.col("row_nr")).to_series()}
+        orphan_data = orphan_data.with_columns(pl.col("row_nr").map_dict(mapping))
+        mother_data = self.replace_null_str(self.data.with_row_count().join(orphan_data, on="row_nr", how="left"))
+
+        for col_str in self.data.select(pl.col(pl.Utf8)).columns:
+            mother_data = mother_data.with_columns(
+                pl.concat_str([col for col in mother_data.columns if col_str in col], separator=" ").alias(col_str)
+            )
+
+        return self.replace_str_null(mother_data[list(self.data_cols.keys())])
 
     def split_description(self) -> DataFrame:
         """Apply split_and_transform method to description column of data and update data_cols with new column names"""
@@ -89,3 +103,15 @@ class Dataset:
                 "price": None,
                 "pricecur": None,
             }
+
+    @staticmethod
+    def replace_null_str(df: DataFrame) -> DataFrame:
+        return df.with_columns(
+            pl.when(pl.col(pl.Utf8).is_null()).then(pl.lit("")).otherwise(pl.col(pl.Utf8)).keep_name()
+        )
+
+    @staticmethod
+    def replace_str_null(df: DataFrame) -> DataFrame:
+        return df.with_columns(
+            pl.when(pl.col(pl.Utf8) == " ").then(None).otherwise(pl.col(pl.Utf8)).keep_name()  # keep original value
+        )
