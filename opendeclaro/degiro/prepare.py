@@ -45,6 +45,7 @@ class Dataset:
         """Handle orphan rows where no date data is available"""
         orphan_data = self.replace_null_str(self.data.with_row_count().filter(pl.col("reg_date").is_null()))
         mapping = {i: i - 1 for i in orphan_data.select(pl.col("row_nr")).to_series()}
+        list_del = [i for i in orphan_data.select(pl.col("row_nr")).to_series()]
         orphan_data = orphan_data.with_columns(pl.col("row_nr").map_dict(mapping))
         mother_data = self.replace_null_str(self.data.with_row_count().join(orphan_data, on="row_nr", how="left"))
 
@@ -52,7 +53,7 @@ class Dataset:
             mother_data = mother_data.with_columns(
                 pl.concat_str([col for col in mother_data.columns if col_str in col], separator=" ").alias(col_str)
             )
-
+        mother_data = mother_data.filter(~pl.col("row_nr").is_in(list_del))
         return self.replace_str_null(mother_data[list(self.data_cols.keys())])
 
     def split_description(self) -> DataFrame:
