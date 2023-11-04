@@ -51,7 +51,7 @@ class Dataset:
 
         for col_str in self.data.select(pl.col(pl.Utf8)).columns:
             mother_data = mother_data.with_columns(
-                pl.concat_str([col for col in mother_data.columns if col_str in col], separator=" ").alias(col_str)
+                pl.concat_str([col for col in mother_data.columns if col_str in col], separator="").alias(col_str)
             )
         mother_data = mother_data.filter(~pl.col("row_nr").is_in(list_del))
         return self.replace_str_null(mother_data[list(self.data_cols.keys())])
@@ -80,8 +80,19 @@ class Dataset:
             dictionary containing action, number, price and price currency
         """
         mapping = {"Compra": "buy", "Venta": "sell"}
+        isin_change_str = "CAMBIO DE ISIN: "
         if desc.startswith("Compra") or desc.startswith("Venta"):
             split_row = desc.split("@")
+            return {
+                "action": mapping.get(split_row[0].split()[0]),
+                "number": float(split_row[0].split()[1]),
+                "price": float(split_row[1].split()[0].replace(",", ".")),
+                "pricecur": split_row[1].split()[1],
+            }
+
+        elif desc.startswith(isin_change_str):
+            _desc = desc.replace(isin_change_str, "")
+            split_row = _desc.split("@")
             return {
                 "action": mapping.get(split_row[0].split()[0]),
                 "number": float(split_row[0].split()[1]),
