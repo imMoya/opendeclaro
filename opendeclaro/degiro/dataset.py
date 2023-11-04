@@ -19,6 +19,7 @@ class Dataset:
         self.data = self.split_description()
         self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
         self.data = self.handle_orphan_rows()
+        self.data = self.merge_slot_purchase()
 
     @property
     def change_isin(self) -> dict:
@@ -72,6 +73,47 @@ class Dataset:
         mother_data = mother_data.filter(~pl.col("row_nr").is_in(list_del))
         return self.replace_str_null(mother_data[list(self.data_cols.keys())])
 
+    def merge_slot_purchase(self) -> DataFrame:
+        unique_buy = (
+            (
+                self.data.filter(pl.col("action") == "buy")
+                .group_by("id_order", maintain_order=True)
+                .agg(
+                    pl.col("reg_date").unique().alias("reg_date_list"),
+                    pl.col("reg_hour").unique().alias("reg_hour_list"),
+                    pl.col("value_date").unique().alias("value_date_list"),
+                    pl.col("product").unique().alias("product_list"),
+                    pl.col("isin").unique().alias("isin_list"),
+                    pl.col("desc").unique().alias("desc_list"),
+                    pl.col("curr_rate").unique().alias("curr_rate_list"),
+                    pl.col("varcur").unique().alias("varcur_list"),
+                    pl.col("var").sum(),
+                    pl.col("cashcur").unique().alias("cashcur_list"),
+                    pl.col("cash").sum(),
+                    pl.col("number").sum(),
+                    pl.col("price").mean(),
+                    pl.col("pricecur").unique().alias("pricecur_list"),
+                )
+            )
+            .with_columns(
+                pl.col("reg_date_list").map_elements(lambda x: x[0]).alias("reg_date"),
+                pl.col("reg_hour_list").map_elements(lambda x: x[0]).alias("reg_hour"),
+                pl.col("value_date_list").map_elements(lambda x: x[0]).alias("value_date"),
+                pl.col("product_list").map_elements(lambda x: x[0]).alias("product"),
+                pl.col("isin_list").map_elements(lambda x: x[0]).alias("isin"),
+                pl.col("desc_list").map_elements(lambda x: x[0]).alias("desc"),
+                pl.col("curr_rate_list").map_elements(lambda x: x[0]).alias("curr_rate"),
+                pl.col("varcur_list").map_elements(lambda x: x[0]).alias("varcur"),
+                pl.col("cashcur_list").map_elements(lambda x: x[0]).alias("cashcur"),
+                pl.lit("buy").alias("action"),
+                pl.col("pricecur_list").map_elements(lambda x: x[0]).alias("pricecur"),
+            )
+            .select(self.data.columns)
+        )
+        return pl.concat([self.data.filter(pl.col("action") != "buy"), unique_buy], how="diagonal").sort(
+            "value_date", descending=True
+        )
+
     def split_description(self) -> DataFrame:
         """Apply split_and_transform method to description column of data and update data_cols with new column names"""
         self.data_cols.update(
@@ -98,6 +140,16 @@ class Dataset:
         mapping = {"Compra": "buy", "Venta": "sell"}
         if desc.startswith("Compra") or desc.startswith("Venta"):
             split_row = desc.split("@")
+            return {
+                "action": mapping.get(split_row[0].split()[0]),
+                "number": float(split_row[0].split()[1]),
+                "price": float(split_row[1].split()[0].replace(",", ".")),
+                "pricecur": split_row[1].split()[1],
+            }
+
+        elif desc.startswith("ESCISI"):
+            _desc = desc.split(": ")[1]
+            split_row = _desc.split("@")
             return {
                 "action": mapping.get(split_row[0].split()[0]),
                 "number": float(split_row[0].split()[1]),
