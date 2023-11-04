@@ -2,13 +2,13 @@ from datetime import timedelta
 from typing import Optional
 
 import polars as pl
-from degiro.prepare import Dataset
+from degiro.dataset import Dataset
 from polars import DataFrame, Series
 
 
 class SaleOfStock:
-    def __init__(self, df: DataFrame, stock: str, id_order: str):
-        self.df = df
+    def __init__(self, ds: Dataset, stock: str, id_order: str):
+        self.df = ds.data
         self.stock = stock
         self.id_order = id_order
         self._raw_sale_df = self.raw_sale_df()
@@ -84,8 +84,8 @@ class SaleOfStock:
 
 
 class PurchaseOfStock(SaleOfStock):
-    def __init__(self, df: DataFrame, stock: str, id_order: str):
-        super().__init__(df, stock, id_order)
+    def __init__(self, ds: Dataset, stock: str, id_order: str):
+        super().__init__(ds, stock, id_order)
         self._aux_purchase_df = self.aux_purchase_df()
         self._raw_purchase_df = self.raw_purchase_df()
 
@@ -101,6 +101,18 @@ class PurchaseOfStock(SaleOfStock):
             )
             .select("id_order")
             .to_series()
+        )
+    
+    @property
+    def shares_purchased(self,):
+        return (
+            self.df.
+            filter(
+                (pl.col("action") == "buy") &
+                (pl.col("product") == self.stock)
+            )
+            .select(pl.sum("number"))
+            .item()
         )
     
     @property
