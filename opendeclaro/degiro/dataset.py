@@ -20,6 +20,22 @@ class Dataset:
         self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
         self.data = self.handle_orphan_rows()
 
+    @property
+    def change_isin(self) -> dict:
+        """Filters dataframe to get the pairs of stocks that changed isin
+
+        Returns
+        -------
+        list
+            dict containing pair of stocks names that changed isin (new isin in key, old in value)
+        """
+        change_isin_str = "CAMBIO DE ISIN"
+        change_isin_df = self.data.filter(pl.col("desc").str.contains(change_isin_str))
+        change_isin_list = list(
+            change_isin_df.group_by("value_date").agg("product").select("product").to_dict(as_series=False).values()
+        )[0]
+        return {key: value for key, value in change_isin_list}
+
     def type_converter(self) -> DataFrame:
         """Convert types of columns to appropiate format"""
         return self.data.select(
@@ -80,19 +96,8 @@ class Dataset:
             dictionary containing action, number, price and price currency
         """
         mapping = {"Compra": "buy", "Venta": "sell"}
-        isin_change_str = "CAMBIO DE ISIN: "
         if desc.startswith("Compra") or desc.startswith("Venta"):
             split_row = desc.split("@")
-            return {
-                "action": mapping.get(split_row[0].split()[0]),
-                "number": float(split_row[0].split()[1]),
-                "price": float(split_row[1].split()[0].replace(",", ".")),
-                "pricecur": split_row[1].split()[1],
-            }
-
-        elif desc.startswith(isin_change_str):
-            _desc = desc.replace(isin_change_str, "")
-            split_row = _desc.split("@")
             return {
                 "action": mapping.get(split_row[0].split()[0]),
                 "number": float(split_row[0].split()[1]),
