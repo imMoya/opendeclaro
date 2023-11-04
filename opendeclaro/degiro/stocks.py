@@ -8,7 +8,7 @@ from polars import DataFrame, Series
 
 class SaleOfStock:
     def __init__(self, ds: Dataset, stock: str, id_order: str):
-        self.df = ds.data
+        self.df = ds.data.filter(pl.col("product") == stock)
         self.stock = stock
         self.id_order = id_order
         self._raw_sale_df = self.raw_sale_df()
@@ -30,12 +30,18 @@ class SaleOfStock:
 
     @property
     def sale_df(self):
+        two_month_val_df = len(
+            self.df.filter( 
+                (pl.col("action") == "buy") & 
+                (pl.col("value_date") < self.date_two_month_lim) & 
+                (pl.col("value_date") > self.date_sale)
+            )
+        )
+        two_month_val = True if two_month_val_df > 0 else False
         _sale_df = (
             self.df
             .with_columns(
-                pl.when((pl.col("value_date") < self.date_two_month_lim) & (pl.col("value_date") > self.date_sale))
-                .then(False)
-                .otherwise(True)
+                pl.lit(two_month_val)
                 .alias("two_month_violation")
             )
             .filter(pl.col("id_order") == self.id_order)
