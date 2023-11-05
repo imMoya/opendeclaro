@@ -108,7 +108,7 @@ class PurchaseOfStock(SaleOfStock):
         )
     
     @property
-    def buy_df_after_prev_sales(self):
+    def purchase_df_after_prev_sales(self):
         buy_df = self.df.filter((pl.col("id_order").is_in(self.buy_orders)) & (pl.col("action") == "buy"))
 
         for row in self.df_older_sales.select("id_order").iter_rows():
@@ -142,7 +142,7 @@ class PurchaseOfStock(SaleOfStock):
         return buy_df
 
     @property
-    def buy_orders(self):
+    def buy_orders(self): # TO DO: Change to only those rows where the sale_id is affected
         return (
             self.df.
             filter(
@@ -154,7 +154,7 @@ class PurchaseOfStock(SaleOfStock):
         )
     
     @property
-    def shares_purchased(self,):
+    def shares_purchased(self,): # TO DO: Change to extract this item from the buy_df dataframe
         return (
             self.df.
             filter(
@@ -178,8 +178,8 @@ class PurchaseOfStock(SaleOfStock):
     
     def aux_purchase_df(self) -> DataFrame:
         return (
-            self.df
-            .filter(pl.col("id_order").is_in(self.buy_orders))
+            self.purchase_df_after_prev_sales
+            .sort("value_date")
             .with_columns(pl.cumsum("number").sub(self.shares_sold).sub(pl.col("number")).alias("pending"))
             .filter(pl.col("pending") <= 0)
             .with_columns(
