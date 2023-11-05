@@ -98,6 +98,50 @@ class PurchaseOfStock(SaleOfStock):
     # fmt: off
 
     @property
+    def df_older_sales(self):
+        return (
+            self.df
+            .filter(
+                (pl.col("action") == "sell") & (pl.col("value_date") < self.date_sale)
+            )
+            .sort("value_date")
+        )
+    
+    @property
+    def buy_df_after_prev_sales(self):
+        buy_df = self.df.filter((pl.col("id_order").is_in(self.buy_orders)) & (pl.col("action") == "buy"))
+
+        for row in self.df_older_sales.select("id_order").iter_rows():
+            sale_df = self.df.filter(pl.col("id_order") == row[0])
+            row_shares_sold = sale_df.filter(pl.col("action") == "sell").select("number")
+
+            # Compute buys of current row
+            buy_df_affected = (
+                buy_df.sort("value_date")
+                .with_columns(pl.cumsum("number").sub(row_shares_sold).sub(pl.col("number")).alias("pending"))
+                .filter(pl.col("pending") <= 0)
+                .with_columns(
+                    pl.when(abs(pl.col("pending")) > pl.col("number"))
+                    .then(pl.col("number"))
+                    .otherwise(abs(pl.col("pending")))
+                    .alias("shares_effective"))
+                .with_columns(
+                    (pl.col("number") - pl.col("shares_effective")).alias("number"))
+            ).select(self.df.columns)
+
+            # Fitler buys of other sales
+            buy_df_untouched = (
+                buy_df.sort("value_date")
+                .with_columns(
+                    pl.cumsum("number").sub(row_shares_sold).sub(pl.col("number")).alias("pending"))
+                .filter(pl.col("pending") > 0)
+            ).select(self.df.columns)
+
+            # Update buy_df
+            buy_df = pl.concat([buy_df_affected, buy_df_untouched])
+        return buy_df
+
+    @property
     def buy_orders(self):
         return (
             self.df.
