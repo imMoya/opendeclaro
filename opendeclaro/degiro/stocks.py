@@ -11,15 +11,15 @@ class SaleOfStock:
         self.df = ds.data.filter(pl.col("product") == stock)
         self.stock = stock
         self.id_order = id_order
-        self._raw_sale_df = self.raw_sale_df()
-        self._aux_sale_df = self.aux_sale_df()
+        self.__raw_sale_df = self.raw_sale_df()
+        self.__aux_sale_df = self.aux_sale_df()
 
     # fmt: off
 
     @property
     def date_sale(self):
         return (
-            self._raw_sale_df
+            self.__raw_sale_df
             .filter(pl.col("action") == "sell")
             .select(pl.col("value_date")).item()
         )
@@ -38,7 +38,7 @@ class SaleOfStock:
             )
         )
         two_month_val = True if two_month_val_df > 0 else False
-        _sale_df = (
+        __sale_df = (
             self.df
             .with_columns(
                 pl.lit(two_month_val)
@@ -47,10 +47,10 @@ class SaleOfStock:
             .filter(pl.col("id_order") == self.id_order)
         )
         return (
-            _sale_df
+            __sale_df
             .select(pl.all().exclude("number"))
             .join(
-                self._aux_sale_df
+                self.__aux_sale_df
                 .select(["id_order", "number", "shares_effective"]), on="id_order", how="outer"
             )
         )
@@ -92,8 +92,8 @@ class SaleOfStock:
 class PurchaseOfStock(SaleOfStock):
     def __init__(self, ds: Dataset, stock: str, id_order: str):
         super().__init__(ds, stock, id_order)
-        self._aux_purchase_df = self.aux_purchase_df()
-        self._raw_purchase_df = self.raw_purchase_df()
+        self.__aux_purchase_df = self.aux_purchase_df()
+        self.__raw_purchase_df = self.raw_purchase_df()
 
     # fmt: off
 
@@ -168,10 +168,10 @@ class PurchaseOfStock(SaleOfStock):
     @property
     def purchase_df(self) -> DataFrame:
         return (
-            self._raw_purchase_df
+            self.__raw_purchase_df
             .select(pl.all().exclude("number"))
             .join(
-                self._aux_purchase_df.select(["id_order", "shares_effective", "number"]), on="id_order", how="inner"
+                self.__aux_purchase_df.select(["id_order", "shares_effective", "number"]), on="id_order", how="inner"
             )
         )
 
@@ -195,7 +195,7 @@ class PurchaseOfStock(SaleOfStock):
             self.df
             .filter(
                 pl.col("id_order")
-                .is_in(self._aux_purchase_df.select("id_order").to_series())
+                .is_in(self.__aux_purchase_df.select("id_order").to_series())
             )
         )
 
