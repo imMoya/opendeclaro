@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 import polars as pl
@@ -8,6 +8,17 @@ from polars import DataFrame, Series
 
 class SaleOfStock:
     def __init__(self, ds: Dataset, stock: str, id_order: str):
+        """Class to compute the sell of a stock
+
+        Parameters
+        ----------
+        ds : Dataset
+            Dataset class from degiro.dataset
+        stock : str
+            financial product involved
+        id_order : str
+            id order of sale
+        """
         self.df = ds.data.filter(pl.col("product") == stock)
         self.stock = stock
         self.id_order = id_order
@@ -17,7 +28,14 @@ class SaleOfStock:
     # fmt: off
 
     @property
-    def date_sale(self):
+    def date_sale(self) -> datetime:
+        """Date of sale of stock
+
+        Returns
+        -------
+        datetime
+            date of sale of stock
+        """
         return (
             self.__raw_sale_df
             .filter(pl.col("action") == "sell")
@@ -25,11 +43,26 @@ class SaleOfStock:
         )
 
     @property
-    def date_two_month_lim(self):
+    def date_two_month_lim(self) -> datetime:
+        """Two month date after sale of stock
+
+        Returns
+        -------
+        datetime
+            two month date after sale of stock
+        """
         return self.date_sale + timedelta(days=60)
 
     @property
-    def sale_df(self):
+    def sale_df(self) -> DataFrame:
+        """Sale of stock and costs associated with order id
+
+        Returns
+        -------
+        DataFrame
+            contains rows which correspond to sale and other rows 
+            with the associated costs of the sale
+        """
         two_month_val_df = len(
             self.df.filter( 
                 (pl.col("action") == "buy") & 
@@ -56,7 +89,14 @@ class SaleOfStock:
         )
     
     @property
-    def shares_sold(self):
+    def shares_sold(self) -> float:
+        """Get total number of shares sold in transaction
+
+        Returns
+        -------
+        float
+            total number of shares sold
+        """
         return (
             self.df
             .filter(pl.col("id_order") == self.id_order)
@@ -64,7 +104,14 @@ class SaleOfStock:
             .item()
         )
 
-    def raw_sale_df(self):
+    def raw_sale_df(self) -> DataFrame:
+        """Get DataFrame of rows involved in stock sale (including costs)
+
+        Returns
+        -------
+        DataFrame
+            contains only rows involved in stock sale (including costs)
+        """
         return (
             self.df
             .filter(
@@ -73,7 +120,14 @@ class SaleOfStock:
             )
         )
 
-    def aux_sale_df(self):
+    def aux_sale_df(self) -> DataFrame:
+        """Get DataFrame of rows involved in stock sale (excluding costs)
+
+        Returns
+        -------
+        DataFrame
+            contains only rows involved in stock sale (excluding costs)
+        """
         return (
             self.df
             .filter(
