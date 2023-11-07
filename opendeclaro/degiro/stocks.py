@@ -22,8 +22,8 @@ class SaleOfStock:
         self.df = ds.data.filter(pl.col("product") == stock)
         self.stock = stock
         self.id_order = id_order
-        self.__raw_sale_df = self.raw_sale_df()
-        self.__aux_sale_df = self.aux_sale_df()
+        self._raw_sale_df = self.raw_sale_df()
+        self._aux_sale_df = self.aux_sale_df()
 
     # fmt: off
 
@@ -37,7 +37,7 @@ class SaleOfStock:
             date of sale of stock
         """
         return (
-            self.__raw_sale_df
+            self._raw_sale_df
             .filter(pl.col("action") == "sell")
             .select(pl.col("value_date")).item()
         )
@@ -83,7 +83,7 @@ class SaleOfStock:
             __sale_df
             .select(pl.all().exclude("number"))
             .join(
-                self.__aux_sale_df
+                self._aux_sale_df
                 .select(["id_order", "number", "shares_effective"]), on="id_order", how="outer"
             )
         )
@@ -144,7 +144,7 @@ class SaleOfStock:
 
 
 class PurchaseOfStockFromSale(SaleOfStock):
-    def __init__(self, ds: Dataset, stock: str, id_order: str):
+    def __init__(self, ds: Dataset, stock: str, id_order: str, change_isin: bool = False):
         """Class to associate stocks purchased for a given sale order
 
         Parameters
@@ -155,8 +155,14 @@ class PurchaseOfStockFromSale(SaleOfStock):
             financial product involved
         id_order : str
             id order of sale
+        change_isin: bool
+            False if sale not associated to change in isin of stock
+            True if sale associated to change in isin of stock
         """
         super().__init__(ds, stock, id_order)
+        if change_isin is True:
+            all_stocks_df = pl.DataFrame(pl.Series("product", [stock, ds.change_isin[stock]]))
+            self.df = ds.data.join(all_stocks_df, on="product", how="inner")
         self.__aux_purchase_df = self.aux_purchase_df()
         self.__raw_purchase_df = self.raw_purchase_df()
 
@@ -223,20 +229,17 @@ class PurchaseOfStockFromSale(SaleOfStock):
 
     @property
     def buy_orders(self) -> Series:
-        """Compute the id of the purchase id_order involved in transaction
+        """Compute the id of all the purchase id_order involved in transaction
 
         Returns
         -------
         Series
-            contains the purchase id_order which are effective (partially or totally)
-            in the sale transaction
+            contains all the purchase id_order of the stock
         """
         return (
-            self.purchase_df.
+            self.df.
             filter(
-                (pl.col("action") == "buy") &
-                (pl.col("product") == self.stock) &
-                (pl.col("shares_effective") > 0)
+                (pl.col("action") == "buy")
             )
             .select("id_order")
             .to_series()
@@ -254,8 +257,7 @@ class PurchaseOfStockFromSale(SaleOfStock):
         return (
             self.purchase_df.
             filter(
-                (pl.col("action") == "buy") &
-                (pl.col("product") == self.stock)
+                (pl.col("action") == "buy") 
             )
             .select(pl.sum("shares_effective"))
             .item()
