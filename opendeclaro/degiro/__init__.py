@@ -1,3 +1,3 @@
 from degiro import config
-from degiro.prepare import Dataset
-from degiro.stocks import PurchaseOfStock, SaleOfStock, Stocks
+from degiro.dataset import Dataset
+from degiro.stocks import PurchaseOfStockFromSale, SaleOfStock, Stocks
