@@ -143,8 +143,19 @@ class SaleOfStock:
     # fmt: on
 
 
-class PurchaseOfStock(SaleOfStock):
+class PurchaseOfStockFromSale(SaleOfStock):
     def __init__(self, ds: Dataset, stock: str, id_order: str):
+        """Class to associate stocks purchased for a given sale order
+
+        Parameters
+        ----------
+        ds : Dataset
+            Dataset class from degiro.dataset
+        stock : str
+            financial product involved
+        id_order : str
+            id order of sale
+        """
         super().__init__(ds, stock, id_order)
         self.__aux_purchase_df = self.aux_purchase_df()
         self.__raw_purchase_df = self.raw_purchase_df()
@@ -152,7 +163,14 @@ class PurchaseOfStock(SaleOfStock):
     # fmt: off
 
     @property
-    def df_older_sales(self):
+    def df_older_sales(self) -> DataFrame:
+        """Compute the sales that took place before the given sale id_order
+
+        Returns
+        -------
+        DataFrame
+            contains previous sales (those before the current sale id_order)
+        """
         return (
             self.df
             .filter(
@@ -162,7 +180,15 @@ class PurchaseOfStock(SaleOfStock):
         )
     
     @property
-    def purchase_df_after_prev_sales(self):
+    def purchase_df_after_prev_sales(self) -> DataFrame:
+        """Compute the dataframe with sales available after older sales
+
+        Returns
+        -------
+        DataFrame
+            contains the available shares for the current sale (shares involved in 
+            older sales are subtracted from dataframe)
+        """
         buy_df = self.df.filter((pl.col("id_order").is_in(self.buy_orders)) & (pl.col("action") == "buy"))
 
         for row in self.df_older_sales.select("id_order").iter_rows():
@@ -196,31 +222,56 @@ class PurchaseOfStock(SaleOfStock):
         return buy_df
 
     @property
-    def buy_orders(self): # TO DO: Change to only those rows where the sale_id is affected
+    def buy_orders(self) -> Series:
+        """Compute the id of the purchase id_order involved in transaction
+
+        Returns
+        -------
+        Series
+            contains the purchase id_order which are effective (partially or totally)
+            in the sale transaction
+        """
         return (
-            self.df.
+            self.purchase_df.
             filter(
                 (pl.col("action") == "buy") &
-                (pl.col("product") == self.stock)
+                (pl.col("product") == self.stock) &
+                (pl.col("shares_effective") > 0)
             )
             .select("id_order")
             .to_series()
         )
     
     @property
-    def shares_purchased(self,): # TO DO: Change to extract this item from the buy_df dataframe
+    def shares_purchased(self) -> float: 
+        """Get total number of shares purchased in transaction
+
+        Returns
+        -------
+        float
+            total number of shares purchased
+        """
         return (
-            self.df.
+            self.purchase_df.
             filter(
                 (pl.col("action") == "buy") &
                 (pl.col("product") == self.stock)
             )
-            .select(pl.sum("number"))
+            .select(pl.sum("shares_effective"))
             .item()
         )
     
     @property
     def purchase_df(self) -> DataFrame:
+        """Computes the main dataframe with all purchase information
+            -> shares_effective show the shares purchased according to 
+                FIFO method for that particular transaction
+
+        Returns
+        -------
+        DataFrame
+            contains all relevant purchase data for a given transaction
+        """
         return (
             self.__raw_purchase_df
             .select(pl.all().exclude("number"))
