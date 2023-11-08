@@ -19,7 +19,8 @@ class Dataset:
         self.data = self.split_description()
         self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
         self.data = self.handle_orphan_rows()
-        self.data = self.merge_slot_purchase()
+        self.data = self.merge_slot_transaction(action="buy")
+        self.data = self.merge_slot_transaction(action="sell")
 
     @property
     def change_isin(self) -> dict:
@@ -73,10 +74,10 @@ class Dataset:
         mother_data = mother_data.filter(~pl.col("row_nr").is_in(list_del))
         return self.replace_str_null(mother_data[list(self.data_cols.keys())])
 
-    def merge_slot_purchase(self) -> DataFrame:
+    def merge_slot_transaction(self, action: str = "buy") -> DataFrame:
         unique_buy = (
             (
-                self.data.filter(pl.col("action") == "buy")
+                self.data.filter(pl.col("action") == action)
                 .group_by("id_order", maintain_order=True)
                 .agg(
                     pl.col("reg_date").unique().alias("reg_date_list"),
@@ -105,12 +106,12 @@ class Dataset:
                 pl.col("curr_rate_list").map_elements(lambda x: x[0]).alias("curr_rate"),
                 pl.col("varcur_list").map_elements(lambda x: x[0]).alias("varcur"),
                 pl.col("cashcur_list").map_elements(lambda x: x[0]).alias("cashcur"),
-                pl.lit("buy").alias("action"),
+                pl.lit(action).alias("action"),
                 pl.col("pricecur_list").map_elements(lambda x: x[0]).alias("pricecur"),
             )
             .select(self.data.columns)
         )
-        return pl.concat([self.data.filter(pl.col("action") != "buy"), unique_buy], how="diagonal").sort(
+        return pl.concat([self.data.filter(pl.col("action") != action), unique_buy], how="diagonal").sort(
             "value_date", descending=True
         )
 
