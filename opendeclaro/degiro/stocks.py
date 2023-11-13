@@ -197,8 +197,8 @@ class PurchaseOfStockFromSale(SaleOfStock):
         """
         buy_df = self.df.filter((pl.col("id_order").is_in(self.buy_orders)) & (pl.col("action") == "buy"))
 
-        for row in self.df_older_sales.select("id_order").iter_rows():
-            sale_df = self.df.filter(pl.col("id_order") == row[0])
+        for row in self.df_older_sales.select("id_order").iter_rows(named=True):
+            sale_df = self.df.filter(pl.col("id_order") == row["id_order"])
             row_shares_sold = sale_df.filter(pl.col("action") == "sell").select("number")
 
             # Compute buys of current row
@@ -345,8 +345,8 @@ class Stocks:
             df = df.filter(pl.col("value_data") <= self.end_date)
 
         # start iterating through sales of stock
-        for row in df.filter(pl.col("action") == "sell").select("id_order").iter_rows():
-            sale_df = df.filter(pl.col("id_order") == row[0])
+        for row in df.filter(pl.col("action") == "sell").select("id_order").iter_rows(named=True):
+            sale_df = df.filter(pl.col("id_order") == row["id_order"])
 
             # add column of possible two month limit restriction
             date_sale = sale_df.filter(pl.col("action") == "sell").select(pl.col("value_date")).item()
@@ -356,16 +356,16 @@ class Stocks:
                 .then(False)
                 .otherwise(True)
                 .alias("two_month_violation")
-            ).filter(pl.col("id_order") == row[0])
+            ).filter(pl.col("id_order") == row["id_order"])
 
             # compute sell
-            auxsell_df = df.filter((pl.col("id_order") == row[0]) & (pl.col("action") == "sell")).with_columns(
+            auxsell_df = df.filter((pl.col("id_order") == row["id_order"]) & (pl.col("action") == "sell")).with_columns(
                 pl.col("number").alias("shares_effective")
             )
             sale_df = sale_df.select(pl.all().exclude("number")).join(
                 auxsell_df.select(["id_order", "number", "shares_effective"]), on="id_order", how="outer"
             )
-            shares_sold = df.filter(pl.col("id_order") == row[0]).select(pl.sum("number"))
+            shares_sold = df.filter(pl.col("id_order") == row["id_order"]).select(pl.sum("number"))
             buy_orders = df.filter(pl.col("action") == "buy").select("id_order").to_series()
             auxbuy_df = (
                 df.filter(pl.col("id_order").is_in(buy_orders))
