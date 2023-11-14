@@ -1,7 +1,8 @@
 """prepare.py classes and functions for degiro"""
-import degiro.config as config
 import polars as pl
 from polars import DataFrame
+
+import opendeclaro.degiro.config as config
 
 
 class Dataset:

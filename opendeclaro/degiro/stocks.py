@@ -2,8 +2,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import polars as pl
-from degiro.dataset import Dataset
 from polars import DataFrame, Series
+
+from opendeclaro.degiro.dataset import Dataset
 
 
 class SaleOfStock:

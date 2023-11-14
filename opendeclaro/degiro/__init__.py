@@ -1,4 +1,4 @@
-from degiro import config
-from degiro.dataset import Dataset
-from degiro.portfolio import Portfolio, Return
-from degiro.stocks import PurchaseOfStockFromSale, SaleOfStock, Stocks
+from opendeclaro.degiro import config
+from opendeclaro.degiro.dataset import Dataset
+from opendeclaro.degiro.portfolio import Portfolio, Return
+from opendeclaro.degiro.stocks import PurchaseOfStockFromSale, SaleOfStock, Stocks

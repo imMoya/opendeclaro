@@ -3,9 +3,10 @@ from datetime import datetime
 from typing import Optional
 
 import polars as pl
-from degiro.dataset import Dataset
-from degiro.stocks import PurchaseOfStockFromSale, SaleOfStock, Stocks
 from polars import DataFrame
+
+from opendeclaro.degiro.dataset import Dataset
+from opendeclaro.degiro.stocks import PurchaseOfStockFromSale, SaleOfStock, Stocks
 
 
 @dataclass
