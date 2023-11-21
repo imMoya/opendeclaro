@@ -1,7 +1,5 @@
 import json
 
-from fastapi.responses import HTMLResponse
-
 from opendeclaro import degiro
 
 
