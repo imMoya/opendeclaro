@@ -1,7 +1,6 @@
-import json
-
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
+from utils import process_csv
 
 from opendeclaro import degiro
 
@@ -24,26 +23,6 @@ html_form = """
 """
 
 
-def process_csv(data_path):
-    try:
-        deg_data = degiro.Dataset(data_path)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Perform some operation on the DataFrame (you can replace this with your own logic)
-    deg_portfolio = degiro.Portfolio(deg_data.data)
-    data = []
-    for row in deg_portfolio.stock_sales.iter_rows(named=True):
-        item = {"id_order": row["id_order"]}
-        ret = deg_portfolio.return_of_sale(deg_data, row["product"], row["id_order"])
-        item["name"] = row["product"]
-        item["return"] = ret.return_value
-        item["two_month_violation"] = ret.two_month_violation
-        data.append(item)
-
-    return json.dumps(data, indent=2)
-
-
 @app.get("/", response_class=HTMLResponse)
 async def get_upload_form():
     return HTMLResponse(content=html_form, status_code=200)
@@ -54,8 +33,10 @@ async def upload_file(file: UploadFile = File(...)):
     # Save the uploaded file
     with open(file.filename, "wb") as f:
         f.write(file.file.read())
-
-    formatted_json = process_csv(file.filename)
+    try:
+        formatted_json = process_csv(file.filename)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
 
     # Render the formatted JSON in the HTML response
     html_response_content = f"""
