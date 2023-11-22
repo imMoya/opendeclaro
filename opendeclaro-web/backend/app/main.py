@@ -23,6 +23,8 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         formatted_json = process_csv(file.filename)  # Modify this line to obtain your formatted JSON
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
+    if not formatted_json:
+        raise HTTPException(status_code=404, detail=f"Computation of P&L of stocks not successful")
     return templates.TemplateResponse("response.html", {"request": request, "formatted_json": formatted_json})
 
 
