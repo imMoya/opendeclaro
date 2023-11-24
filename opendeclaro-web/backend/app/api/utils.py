@@ -1,4 +1,8 @@
 import json
+import os
+import random
+import shutil
+import string
 
 from opendeclaro import degiro
 
@@ -16,3 +20,13 @@ def process_csv(data_path: str) -> str:
         data.append(item)
 
     return json.dumps(data, indent=2)
+
+
+def generate_random_str(k: str = 10) -> str:
+    return "".join(random.choices(string.ascii_letters + string.digits, k=k))
+
+
+def create_user_upload_folder(path: str) -> None:
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    os.makedirs(path)
