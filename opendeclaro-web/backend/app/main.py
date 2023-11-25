@@ -42,8 +42,6 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
 
-    with open("app/api/templates/table.html") as f:
-        html_content = f.read()
     data = json.loads(formatted_json)
     data_html = ""
     for item in data:
