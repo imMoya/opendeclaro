@@ -45,14 +45,19 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
     with open("app/api/templates/table.html") as f:
         html_content = f.read()
     data = json.loads(formatted_json)
+    data_html = ""
     for item in data:
-        html_content += "<tr>"
+        data_html += "<tr>"
         for _, value in item.items():
-            html_content += f"<td>{value}</td>"
-        html_content += "</tr>"
-    return HTMLResponse(content=html_content)
+            data_html += f"<td>{value}</td>"
+        data_html += "</tr>"
 
-    # templates.TemplateResponse("response.html", {"request": request, "formatted_json": formatted_json})
+    return templates.TemplateResponse("table.html", {"request": request, "inserted_html": data_html})
+
+
+# HTMLResponse(content=html_content)
+
+# templates.TemplateResponse("response.html", {"request": request, "formatted_json": formatted_json})
 
 
 if __name__ == "__main__":
