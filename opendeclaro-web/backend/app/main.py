@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import shutil
@@ -41,7 +42,17 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
 
-    return templates.TemplateResponse("response.html", {"request": request, "formatted_json": formatted_json})
+    with open("app/api/templates/table.html") as f:
+        html_content = f.read()
+    data = json.loads(formatted_json)
+    for item in data:
+        html_content += "<tr>"
+        for _, value in item.items():
+            html_content += f"<td>{value}</td>"
+        html_content += "</tr>"
+    return HTMLResponse(content=html_content)
+
+    # templates.TemplateResponse("response.html", {"request": request, "formatted_json": formatted_json})
 
 
 if __name__ == "__main__":
