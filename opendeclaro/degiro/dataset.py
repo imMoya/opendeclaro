@@ -1,6 +1,8 @@
 """prepare.py classes and functions for degiro"""
+from typing import Union
+
 import polars as pl
-from polars import DataFrame
+from polars import DataFrame, LazyFrame
 
 import opendeclaro.degiro.config as config
 
@@ -14,11 +16,12 @@ class Dataset:
         path : str
             path location of dataset csv
         """
-        self.data = pl.read_csv(path)
+        self.data = pl.scan_csv(path)
         self.data_cols = dict(zip(config.cols_list, self.data.columns))
         self.data = self.type_converter()
         self.data = self.split_description()
         self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
+        # After handling orphan rows -> EAGER MODE ON
         self.data = self.handle_orphan_rows()
         self.data = self.merge_slot_transaction(action="buy")
         self.data = self.merge_slot_transaction(action="sell")
@@ -39,7 +42,7 @@ class Dataset:
         )[0]
         return {key: value for key, value in change_isin_list}
 
-    def type_converter(self) -> DataFrame:
+    def type_converter(self) -> Union[DataFrame, LazyFrame]:
         """Convert types of columns to appropiate format"""
         return self.data.select(
             pl.col(self.data_cols["reg_date"]).str.strptime(pl.Datetime),
@@ -56,12 +59,24 @@ class Dataset:
             pl.col(self.data_cols["id_order"]),
         )
 
-    def drop_orphan_rows(self) -> DataFrame:
+    def drop_orphan_rows(self) -> Union[DataFrame, LazyFrame]:
         """Drop orphan rows where no date data is available"""
         return self.data.filter(pl.col(self.data_cols["reg_date"]) != None)
 
-    def handle_orphan_rows(self) -> DataFrame:
-        """Handle orphan rows where no date data is available"""
+    def handle_orphan_rows(self) -> Union[DataFrame, LazyFrame]:
+        """Handle orphan rows where no date data is available.
+
+        When an operation is divided into two rows (due to broker mistakes), this leads
+        to what we call an 'orphan row', which is the second row related to the operation.
+        This method merges the 'orphan row' (only the str columns )with the 'mother row'
+        (the row above)
+
+        Returns
+        -------
+        Union[DataFrame, LazyFrame]
+            which contains no 'orphan rows' in it
+        """
+        self.data = self.data.collect()
         orphan_data = self.replace_null_str(self.data.with_row_count().filter(pl.col("reg_date").is_null()))
         mapping = {i: i - 1 for i in orphan_data.select(pl.col("row_nr")).to_series()}
         list_del = [i for i in orphan_data.select(pl.col("row_nr")).to_series()]
@@ -116,7 +131,7 @@ class Dataset:
             "value_date", descending=True
         )
 
-    def split_description(self) -> DataFrame:
+    def split_description(self) -> Union[DataFrame, LazyFrame]:
         """Apply split_and_transform method to description column of data and update data_cols with new column names"""
         self.data_cols.update(
             dict(zip(["action", "number", "price", "pricecur"], ["action", "number", "price", "pricecur"]))
@@ -176,13 +191,13 @@ class Dataset:
             }
 
     @staticmethod
-    def replace_null_str(df: DataFrame) -> DataFrame:
+    def replace_null_str(df: Union[DataFrame, LazyFrame]) -> Union[DataFrame, LazyFrame]:
         return df.with_columns(
             pl.when(pl.col(pl.Utf8).is_null()).then(pl.lit("")).otherwise(pl.col(pl.Utf8)).keep_name()
         )
 
     @staticmethod
-    def replace_str_null(df: DataFrame) -> DataFrame:
+    def replace_str_null(df: Union[DataFrame, LazyFrame]) -> Union[DataFrame, LazyFrame]:
         return df.with_columns(
             pl.when(pl.col(pl.Utf8) == " ").then(None).otherwise(pl.col(pl.Utf8)).keep_name()  # keep original value
         )
