@@ -1,5 +1,5 @@
 """prepare.py classes and functions for degiro"""
-from typing import Union
+from typing import List, Union
 
 import polars as pl
 from polars import DataFrame, LazyFrame
@@ -26,6 +26,7 @@ class Dataset:
         self.data = self.handle_orphan_rows()
         self.data = self.merge_slot_transaction(action="buy")
         self.data = self.merge_slot_transaction(action="sell")
+        self.data = self.category_addition()
 
     @property
     def change_isin(self) -> dict:
@@ -151,6 +152,16 @@ class Dataset:
             pl.col(self.data_cols["desc"]).map_elements(self.split_and_transform).alias("result")
         ).unnest("result")
 
+    def category_addition(self) -> Union[DataFrame, LazyFrame]:
+        return self.data.with_columns(
+            category=pl.when(pl.col("desc").str.contains("|".join(self.options_names())))
+            .then("option")
+            .when((pl.col("action") == "buy") | (pl.col("action") == "sell"))
+            .then("stock")
+            .when(pl.col("desc") == "Dividendo")
+            .then("dividend")
+        )
+
     @staticmethod
     def split_and_transform(desc: str) -> dict:
         """Split string and get dictionary with four items: action, number, price and pricecur
@@ -212,3 +223,7 @@ class Dataset:
         return df.with_columns(
             pl.when(pl.col(pl.Utf8) == " ").then(None).otherwise(pl.col(pl.Utf8)).keep_name()  # keep original value
         )
+
+    @staticmethod
+    def options_names() -> List[str]:
+        return ["JAN2", "FEB2", "MAR2", "APR2", "JUN2", "JUL2", "AUG2", "SEP2", "OCT2", "NOV2", "DEC2"]
