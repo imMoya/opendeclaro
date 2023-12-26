@@ -18,6 +18,7 @@ class Dataset:
         """
         self.data = pl.scan_csv(path)
         self.data_cols = dict(zip(config.cols_list, self.data.columns))
+        self.data = self.create_combined_date()
         self.data = self.type_converter()
         self.data = self.split_description()
         self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
@@ -42,12 +43,20 @@ class Dataset:
         )[0]
         return {key: value for key, value in change_isin_list}
 
+    def create_combined_date(self) -> Union[DataFrame, LazyFrame]:
+        """Add date column combining value_date and reg_hour"""
+        self.data_cols.update(dict(zip(["date"], ["date"])))
+        return self.data.with_columns(
+            pl.concat_str([self.data_cols["value_date"], self.data_cols["reg_hour"]], separator=" ").alias("date")
+        )
+
     def type_converter(self) -> Union[DataFrame, LazyFrame]:
         """Convert types of columns to appropiate format"""
         return self.data.select(
             pl.col(self.data_cols["reg_date"]).str.strptime(pl.Datetime),
             pl.col(self.data_cols["reg_hour"]).str.strptime(pl.Datetime, "%H:%M"),
             pl.col(self.data_cols["value_date"]).str.strptime(pl.Datetime),
+            pl.col("date").str.strptime(pl.Datetime),
             pl.col(self.data_cols["product"]),
             pl.col(self.data_cols["isin"]),
             pl.col(self.data_cols["desc"]),
@@ -99,6 +108,7 @@ class Dataset:
                     pl.col("reg_date").unique().alias("reg_date_list"),
                     pl.col("reg_hour").unique().alias("reg_hour_list"),
                     pl.col("value_date").unique().alias("value_date_list"),
+                    pl.col("date").unique().alias("date_list"),
                     pl.col("product").unique().alias("product_list"),
                     pl.col("isin").unique().alias("isin_list"),
                     pl.col("desc").unique().alias("desc_list"),
@@ -116,6 +126,7 @@ class Dataset:
                 pl.col("reg_date_list").map_elements(lambda x: x[0]).alias("reg_date"),
                 pl.col("reg_hour_list").map_elements(lambda x: x[0]).alias("reg_hour"),
                 pl.col("value_date_list").map_elements(lambda x: x[0]).alias("value_date"),
+                pl.col("date_list").map_elements(lambda x: x[0]).alias("date"),
                 pl.col("product_list").map_elements(lambda x: x[0]).alias("product"),
                 pl.col("isin_list").map_elements(lambda x: x[0]).alias("isin"),
                 pl.col("desc_list").map_elements(lambda x: x[0]).alias("desc"),
