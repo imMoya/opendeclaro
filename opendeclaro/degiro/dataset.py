@@ -27,6 +27,8 @@ class Dataset:
         self.data = self.merge_slot_transaction(action="buy")
         self.data = self.merge_slot_transaction(action="sell")
         self.data = self.category_addition()
+        # Drop duplicates to avoid same transaction duplicated
+        self.data = self.data.unique(maintain_order=True)
 
     @property
     def change_isin(self) -> dict:

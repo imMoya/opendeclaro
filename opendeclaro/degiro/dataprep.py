@@ -35,5 +35,5 @@ class DataPrep:
                 "id_order", "curr_rate"
             )
         )
-        return df.join(df_costs, on="id_order").join(df_curr_rate, on="id_order").filter(pl.col("category") == "stock")
+        return df.join(df_costs, on="id_order").join(df_curr_rate, on="id_order").filter(pl.col("category") == "stock").unique(maintain_order=True)
 # fmt:on
