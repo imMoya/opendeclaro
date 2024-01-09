@@ -164,8 +164,7 @@ class Dataset:
             .then("dividend")
         )
 
-    @staticmethod
-    def split_and_transform(desc: str) -> dict:
+    def split_and_transform(self, desc: str) -> dict:
         """Split string and get dictionary with four items: action, number, price and pricecur
 
         Parameters
@@ -179,33 +178,42 @@ class Dataset:
             dictionary containing action, number, price and price currency
         """
         mapping = {"Compra": "buy", "Venta": "sell"}
-        if desc.startswith("Compra") or desc.startswith("Venta"):
-            split_row = desc.split("@")
+        if ("Compra" in desc) or ("Venta" in desc):
+            info = self.get_substring_after_colon(desc)
+            split_row = info.split("@")
             return {
                 "action": mapping.get(split_row[0].split()[0]),
-                "number": float(split_row[0].split()[1]),
-                "price": float(split_row[1].split()[0].replace(",", ".")),
+                "number": float(split_row[0].split()[1].replace(".", "").replace(",", ".")),
+                "price": float(split_row[1].split()[0].replace(".", "").replace(",", ".")),
                 "pricecur": split_row[1].split()[1],
             }
+        # if desc.startswith("Compra") or desc.startswith("Venta"):
+        #     split_row = desc.split("@")
+        #     return {
+        #         "action": mapping.get(split_row[0].split()[0]),
+        #         "number": float(split_row[0].split()[1]),
+        #         "price": float(split_row[1].split()[0].replace(",", ".")),
+        #         "pricecur": split_row[1].split()[1],
+        #     }
 
-        elif desc.startswith("ESCISI"):
-            _desc = desc.split(": ")[1]
-            split_row = _desc.split("@")
-            return {
-                "action": mapping.get(split_row[0].split()[0]),
-                "number": float(split_row[0].split()[1]),
-                "price": float(split_row[1].split()[0].replace(",", ".")),
-                "pricecur": split_row[1].split()[1],
-            }
+        # elif desc.startswith("ESCISI"):
+        #     _desc = desc.split(": ")[1]
+        #     split_row = _desc.split("@")
+        #     return {
+        #         "action": mapping.get(split_row[0].split()[0]),
+        #         "number": float(split_row[0].split()[1]),
+        #         "price": float(split_row[1].split()[0].replace(",", ".")),
+        #         "pricecur": split_row[1].split()[1],
+        #     }
 
-        elif desc.startswith("VENCIMIENTO"):
-            split_row = desc.split(": ")[1].split("@")
-            return {
-                "action": mapping.get(split_row[0].split()[0]),
-                "number": float(split_row[0].split()[1]),
-                "price": float(split_row[1].split()[0].replace(",", ".")),
-                "pricecur": split_row[1].split()[1],
-            }
+        # elif desc.startswith("VENCIMIENTO"):
+        #     split_row = desc.split(": ")[1].split("@")
+        #     return {
+        #         "action": mapping.get(split_row[0].split()[0]),
+        #         "number": float(split_row[0].split()[1]),
+        #         "price": float(split_row[1].split()[0].replace(",", ".")),
+        #         "pricecur": split_row[1].split()[1],
+        #     }
         else:
             return {
                 "action": None,
@@ -229,3 +237,12 @@ class Dataset:
     @staticmethod
     def options_names() -> List[str]:
         return ["JAN2", "FEB2", "MAR2", "APR2", "JUN2", "JUL2", "AUG2", "SEP2", "OCT2", "NOV2", "DEC2"]
+
+    @staticmethod
+    def get_substring_after_colon(input_str: str):
+        if ": " in input_str:
+            index = input_str.index(": ")
+            result = input_str[index + 2 :]
+            return result
+        else:
+            return input_str
