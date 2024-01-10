@@ -24,6 +24,8 @@ class Dataset:
         self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
         # After handling orphan rows -> EAGER MODE ON
         self.data = self.handle_orphan_rows()
+        self.data = self.unintended_addition()
+        print(self.data)
         self.data = self.merge_slot_transaction(action="buy")
         self.data = self.merge_slot_transaction(action="sell")
         self.data = self.category_addition()
@@ -105,7 +107,7 @@ class Dataset:
     def merge_slot_transaction(self, action: str = "buy") -> DataFrame:
         unique_buy = (
             (
-                self.data.filter(pl.col("action") == action)
+                self.data.filter((pl.col("action") == action) & (pl.col("unintended") == False))
                 .group_by("id_order", maintain_order=True)
                 .agg(
                     pl.col("reg_date").unique().alias("reg_date_list"),
@@ -123,6 +125,7 @@ class Dataset:
                     pl.col("number").sum(),
                     pl.col("price").mean(),
                     pl.col("pricecur").unique().alias("pricecur_list"),
+                    pl.col("unintended").unique().alias("unintended_list"),
                 )
             )
             .with_columns(
@@ -138,6 +141,7 @@ class Dataset:
                 pl.col("cashcur_list").map_elements(lambda x: x[0]).alias("cashcur"),
                 pl.lit(action).alias("action"),
                 pl.col("pricecur_list").map_elements(lambda x: x[0]).alias("pricecur"),
+                pl.col("unintended_list").map_elements(lambda x: x[0]).alias("unintended"),
             )
             .select(self.data.columns)
         )
@@ -162,6 +166,16 @@ class Dataset:
             .then("stock")
             .when(pl.col("desc") == "Dividendo")
             .then("dividend")
+        )
+
+    def unintended_addition(self) -> Union[DataFrame, LazyFrame]:
+        self.data_cols.update(dict(zip(["unintended"], ["unintended"])))
+        return self.data.with_columns(
+            unintended=pl.when(
+                ((pl.col("action") == "buy") | (pl.col("action") == "sell")) & (pl.col("id_order").str.lengths() == 0)
+            )
+            .then(True)
+            .otherwise(False)
         )
 
     def split_and_transform(self, desc: str) -> dict:
