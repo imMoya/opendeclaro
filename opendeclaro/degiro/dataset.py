@@ -25,12 +25,12 @@ class Dataset:
         # After handling orphan rows -> EAGER MODE ON
         self.data = self.handle_orphan_rows()
         self.data = self.unintended_addition()
-        print(self.data)
         self.data = self.merge_slot_transaction(action="buy")
+        print(self.data)
         self.data = self.merge_slot_transaction(action="sell")
         self.data = self.category_addition()
         # Drop duplicates to avoid same transaction duplicated
-        self.data = self.data.unique(maintain_order=True)
+        self.data = self.data.sort("date", descending=True).unique()
 
     @property
     def change_isin(self) -> dict:
@@ -104,6 +104,7 @@ class Dataset:
         mother_data = mother_data.filter(~pl.col("row_nr").is_in(list_del))
         return self.replace_str_null(mother_data[list(self.data_cols.keys())])
 
+    # fmt:off
     def merge_slot_transaction(self, action: str = "buy") -> DataFrame:
         unique_buy = (
             (
@@ -145,12 +146,19 @@ class Dataset:
             )
             .select(self.data.columns)
         )
-        return (
-            pl.concat([self.data.filter(pl.col("action").str.lengths() > 0), unique_buy], how="diagonal")
-            .sort("value_date", descending=True)
-            .unique()
+        unique_buy_id_orders = (
+            self.data.filter((pl.col("action") == action) & (pl.col("unintended") == False))
+            .select(pl.col("id_order"))
+            .to_series()
+            .to_list()
         )
-
+        rest_of_data = (
+            self.data.filter(
+                pl.col("id_order").is_in(unique_buy_id_orders).is_not() | 
+                ((pl.col("id_order").is_in(unique_buy_id_orders)) & ((pl.col("action") != action))))
+        )
+        return pl.concat([rest_of_data, unique_buy])
+    # fmt:on
     def split_description(self) -> Union[DataFrame, LazyFrame]:
         """Apply split_and_transform method to description column of data and update data_cols with new column names"""
         self.data_cols.update(

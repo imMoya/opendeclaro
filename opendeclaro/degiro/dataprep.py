@@ -6,8 +6,8 @@ from polars import DataFrame
 class DataPrep:
     def __init__(self, data: DataFrame):
         self.data = data
-
-    def prepare_stock_id_orders(self):
+        
+    def prepare_stocks_id_orders(self):
         df = (
             self.data
             .filter(
@@ -36,4 +36,18 @@ class DataPrep:
             )
         )
         return df.join(df_costs, on="id_order").join(df_curr_rate, on="id_order").filter(pl.col("category") == "stock").unique(maintain_order=True)
+    
+    def prepare_stocks_involuntary_orders(self):
+        df = (
+            self.data
+            .filter(
+                (pl.col("action").str.lengths() > 0) & 
+                (pl.col("id_order").str.lengths() == 0)
+            )
+        )
+        return df
+    
+    def join_stocks_orders(self):
+        pass
+
 # fmt:on
