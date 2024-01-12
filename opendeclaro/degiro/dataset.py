@@ -145,8 +145,10 @@ class Dataset:
             )
             .select(self.data.columns)
         )
-        return pl.concat([self.data.filter(pl.col("action") != action), unique_buy], how="diagonal").sort(
-            "value_date", descending=True
+        return (
+            pl.concat([self.data.filter(pl.col("action").str.lengths() > 0), unique_buy], how="diagonal")
+            .sort("value_date", descending=True)
+            .unique()
         )
 
     def split_description(self) -> Union[DataFrame, LazyFrame]:
