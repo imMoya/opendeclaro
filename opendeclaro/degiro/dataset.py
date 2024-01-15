@@ -26,11 +26,12 @@ class Dataset:
         self.data = self.handle_orphan_rows()
         self.data = self.unintended_addition()
         self.data = self.merge_slot_transaction(action="buy")
-        print(self.data)
         self.data = self.merge_slot_transaction(action="sell")
         self.data = self.category_addition()
-        # Drop duplicates to avoid same transaction duplicated
-        self.data = self.data.sort("date", descending=True).unique()
+        # Change dtype and drop duplicates to avoid same transaction duplicated
+        self.data = self.replace_str_null(self.data)
+        self.data = self.change_curr_rate_dtype()
+        self.data = self.data.unique().sort("date", descending=True)
 
     @property
     def change_isin(self) -> dict:
@@ -187,6 +188,16 @@ class Dataset:
             .then(True)
             .otherwise(False)
         )
+
+    def change_curr_rate_dtype(self):
+        self.data = self.data.with_columns(
+            pl.col("curr_rate")
+            .cast(pl.Utf8)
+            .str.replace(",", ".")
+            .cast(pl.Float32, strict=False)
+            .alias("curr_rate_float")
+        )
+        return self.data.drop("curr_rate").rename({"curr_rate_float": "curr_rate"}).drop("curr_rate_float")
 
     def split_and_transform(self, desc: str) -> dict:
         """Split string and get dictionary with four items: action, number, price and pricecur
