@@ -7,7 +7,7 @@ class DataPrep:
     def __init__(self, data: DataFrame):
         self.data = data
         
-    def prepare_stocks_id_orders(self):
+    def prepare_id_orders(self):
         df = (
             self.data
             .filter(
@@ -29,15 +29,19 @@ class DataPrep:
         df_curr_rate = (
             self.data
             .filter(
-                pl.col("curr_rate").is_not_null() 
+                (pl.col("curr_rate").is_not_null()) &
+                (pl.col("id_order").str.lengths() > 0)
             )
             .select(
                 "id_order", "curr_rate"
             )
         )
-        return df.join(df_costs, on="id_order").join(df_curr_rate, on="id_order").filter(pl.col("category") == "stock").unique(maintain_order=True).sort("date", descending=True)
+        df.write_csv("datasets/Account_data.csv")
+        df_costs.write_csv("datasets/Account_costs.csv")
+        df_curr_rate.write_csv("datasets/Account_curr_rate.csv")
+        return df.join(df_costs, on="id_order").join(df_curr_rate, left_on="id_order", right_on="id_order", how="left").sort("date", descending=True)
     
-    def prepare_stocks_involuntary_orders(self):
+    def prepare_involuntary_orders(self):
         df = (
             self.data
             .filter(
@@ -51,8 +55,8 @@ class DataPrep:
     @property
     def stocks_orders(self):
         return pl.concat(
-            [self.prepare_stocks_id_orders(),
-            self.prepare_stocks_involuntary_orders().select(self.prepare_stocks_id_orders().columns)],
+            [self.prepare_id_orders(),
+            self.prepare_involuntary_orders().select(self.prepare_id_orders().columns)],
             how="align"
         ).sort("date", descending=True)
 
