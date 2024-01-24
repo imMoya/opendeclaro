@@ -48,5 +48,17 @@ class Returns:
             .select(pl.col("number")).sum().item()
         )
         return stocks_purchased_before - stocks_sold_before
+    
+    @staticmethod
+    def choose_compute_transaction(row: dict, stocks_before: float) -> bool:
+        if (row["action"] == "sell") & (stocks_before <= 0):
+            return False
+        if (row["action"] == "sell") & (stocks_before > 0):
+            return True
+        if (row["action"] == "buy") & (stocks_before >= 0):
+            return False
+        if (row["action"] == "buy") & (stocks_before < 0):
+            return True
+
 
 # fmt: on
