@@ -42,6 +42,7 @@ secrets.json
 *~
 
 # Ignore dataset file
+datasets/
 Account.csv
 U8*csv
 Account*csv
