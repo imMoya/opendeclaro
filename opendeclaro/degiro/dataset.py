@@ -39,7 +39,7 @@ class Dataset:
 
         Returns
         -------
-        list
+        dict
             dict containing pair of stocks names that changed isin (new isin in key, old in value)
         """
         change_isin_str = "CAMBIO DE ISIN"
@@ -66,7 +66,7 @@ class Dataset:
             pl.col(self.data_cols["product"]),
             pl.col(self.data_cols["isin"]),
             pl.col(self.data_cols["desc"]),
-            pl.col(self.data_cols["curr_rate"]),
+            pl.col(self.data_cols["curr_rate"]).cast(pl.Utf8),
             pl.col(self.data_cols["varcur"]),
             pl.col(self.data_cols["var"]).str.replace(",", ".").cast(pl.Float32, strict=False),
             pl.col(self.data_cols["cashcur"]),
