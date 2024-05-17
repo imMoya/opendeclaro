@@ -137,9 +137,9 @@ class Returns:
                 row["date_2m_limit"] = row["value_date"] + timedelta(days=60)
                 row["shares_effective"] = min(abs(stocks_before), row["number"])
                 opp_df = FIFO(row, df).opp_df(opp_df)
-                row_res = row["var"] + row["commision"]
+                row_res = row["var"]/row["curr_rate"] + row["commision"]
                 opp_df_res = (
-                    (opp_df["var"] + opp_df["commision"]) * opp_df["shares_effective"] / opp_df["number_orig"]
+                    (opp_df["var"]/row["curr_rate"] + opp_df["commision"]) * opp_df["shares_effective"] / opp_df["number_orig"]
                 ).sum()
                 if (row_res + opp_df_res < 0) & (
                     opp_df.filter(pl.col("value_date") < row["date_2m_limit"]).shape != 
