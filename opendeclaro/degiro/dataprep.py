@@ -54,10 +54,23 @@ class DataPrep:
     
     @property
     def stocks_orders(self):
-        return pl.concat(
-            [self.prepare_id_orders(),
-            self.prepare_involuntary_orders().select(self.prepare_id_orders().columns)],
-            how="align"
-        ).sort("date", descending=True)
+        return self.map_eur_curr_rate(
+            pl.concat(
+                [self.prepare_id_orders(),
+                self.prepare_involuntary_orders().select(self.prepare_id_orders().columns)],
+                how="align"
+            ).sort("date", descending=True)
+        )
+
+    
+    @staticmethod
+    def map_eur_curr_rate(df: DataFrame) -> DataFrame:
+        return df.with_columns(
+            pl.when(pl.col("varcur").str.contains("EUR"))
+            .then(1.0)
+            .otherwise(pl.col("curr_rate"))
+            .alias("curr_rate")
+        )
+
 
 # fmt:on
