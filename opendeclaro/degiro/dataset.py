@@ -66,7 +66,7 @@ class Dataset:
             pl.col(self.data_cols["product"]),
             pl.col(self.data_cols["isin"]),
             pl.col(self.data_cols["desc"]),
-            pl.col(self.data_cols["curr_rate"]).cast(pl.Utf8),
+            pl.col(self.data_cols["curr_rate"]).cast(pl.String),
             pl.col(self.data_cols["varcur"]),
             pl.col(self.data_cols["var"]).str.replace(",", ".").cast(pl.Float32, strict=False),
             pl.col(self.data_cols["cashcur"]),
@@ -96,8 +96,8 @@ class Dataset:
         mapping = {i: i - 1 for i in orphan_data.select(pl.col("row_nr")).to_series()}
         list_del = [i for i in orphan_data.select(pl.col("row_nr")).to_series()]
         orphan_data = orphan_data.with_columns(pl.col("row_nr").map_dict(mapping))
+        orphan_data = orphan_data.with_columns(pl.col("row_nr").cast(pl.UInt32, strict=False).alias("row_nr"))
         mother_data = self.replace_null_str(self.data.with_row_count().join(orphan_data, on="row_nr", how="left"))
-
         for col_str in self.data.select(pl.col(pl.Utf8)).columns:
             mother_data = mother_data.with_columns(
                 pl.concat_str([col for col in mother_data.columns if col_str in col], separator="").alias(col_str)
@@ -131,19 +131,19 @@ class Dataset:
                 )
             )
             .with_columns(
-                pl.col("reg_date_list").map_elements(lambda x: x[0]).alias("reg_date"),
-                pl.col("reg_hour_list").map_elements(lambda x: x[0]).alias("reg_hour"),
-                pl.col("value_date_list").map_elements(lambda x: x[0]).alias("value_date"),
-                pl.col("date_list").map_elements(lambda x: x[0]).alias("date"),
-                pl.col("product_list").map_elements(lambda x: x[0]).alias("product"),
-                pl.col("isin_list").map_elements(lambda x: x[0]).alias("isin"),
-                pl.col("desc_list").map_elements(lambda x: x[0]).alias("desc"),
-                pl.col("curr_rate_list").map_elements(lambda x: x[0]).alias("curr_rate"),
-                pl.col("varcur_list").map_elements(lambda x: x[0]).alias("varcur"),
-                pl.col("cashcur_list").map_elements(lambda x: x[0]).alias("cashcur"),
+                pl.col("reg_date_list").map_elements(lambda x: x[0], return_dtype=pl.Datetime).alias("reg_date"),
+                pl.col("reg_hour_list").map_elements(lambda x: x[0], return_dtype=pl.Datetime).alias("reg_hour"),
+                pl.col("value_date_list").map_elements(lambda x: x[0], return_dtype=pl.Datetime).alias("value_date"),
+                pl.col("date_list").map_elements(lambda x: x[0], return_dtype=pl.Datetime).alias("date"),
+                pl.col("product_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("product"),
+                pl.col("isin_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("isin"),
+                pl.col("desc_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("desc"),
+                pl.col("curr_rate_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("curr_rate"),
+                pl.col("varcur_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("varcur"),
+                pl.col("cashcur_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("cashcur"),
                 pl.lit(action).alias("action"),
-                pl.col("pricecur_list").map_elements(lambda x: x[0]).alias("pricecur"),
-                pl.col("unintended_list").map_elements(lambda x: x[0]).alias("unintended"),
+                pl.col("pricecur_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("pricecur"),
+                pl.col("unintended_list").map_elements(lambda x: x[0], return_dtype=pl.Boolean).alias("unintended"),
             )
             .select(self.data.columns)
         )
@@ -166,17 +166,19 @@ class Dataset:
             dict(zip(["action", "number", "price", "pricecur"], ["action", "number", "price", "pricecur"]))
         )
         return self.data.with_columns(
-            pl.col(self.data_cols["desc"]).map_elements(self.split_and_transform).alias("result")
+            pl.col(self.data_cols["desc"])
+            .map_elements(self.split_and_transform, return_dtype=pl.Struct)
+            .alias("result")
         ).unnest("result")
 
     def category_addition(self) -> Union[DataFrame, LazyFrame]:
         return self.data.with_columns(
             category=pl.when(pl.col("desc").str.contains("|".join(self.options_names())))
-            .then("option")
+            .then(pl.lit("option"))
             .when((pl.col("action") == "buy") | (pl.col("action") == "sell"))
-            .then("stock")
+            .then(pl.lit("stock"))
             .when(pl.col("desc") == "Dividendo")
-            .then("dividend")
+            .then(pl.lit("dividend"))
         )
 
     def unintended_addition(self) -> Union[DataFrame, LazyFrame]:
