@@ -45,9 +45,10 @@ class FIFO:
                 .filter(
                     (pl.col("action") == opposite_transaction(self.row["action"]))
                     & (pl.col("value_date") < self.row["value_date"])
+                    & (pl.col("unintended") == False)
                 )
                 .with_columns(
-                    pl.cumsum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
+                    pl.cum_sum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
                 )
                 .filter(pl.col("pending") <= 0)
                 .with_columns(
@@ -62,7 +63,7 @@ class FIFO:
                 self.df.sort("value_date")
                 .filter((pl.col("action") == opposite_transaction(self.row["action"])))
                 .with_columns(
-                    pl.cumsum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
+                    pl.cum_sum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
                 )
                 .filter(pl.col("pending") > 0)
                 .with_columns(pl.lit(0.0).alias("shares_effective"))
@@ -73,7 +74,7 @@ class FIFO:
                 opp_df.sort("value_date")
                 .filter(pl.col("number") > 0)
                 .with_columns(
-                    pl.cumsum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending")
+                    pl.cum_sum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending")
                 )
                 .filter(pl.col("pending") <= 0)
                 .with_columns(
@@ -88,7 +89,7 @@ class FIFO:
                 opp_df.sort("value_date")
                 .filter(pl.col("action") == opposite_transaction(self.row["action"]))
                 .with_columns(
-                    pl.cumsum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
+                    pl.cum_sum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
                 )
                 .filter(pl.col("pending") > 0)
                 .with_columns(pl.lit(0.0).alias("shares_effective"))
@@ -132,6 +133,12 @@ class Returns:
         opp_df = pl.DataFrame([])
         return_stock = 0
         for row in df.sort(pl.col("value_date")).iter_rows(named=True):
+            if row["isin_change"] != None:
+                df = (
+                    self.df
+                    .filter((pl.col("isin") == isin) | (pl.col("isin") == row["isin_change"]))
+                    .with_columns(pl.col("number").alias("number_orig"))
+                )
             stocks_before = self.get_stocks_purchased_before(row, df)
             if self.choose_compute_transaction(row, stocks_before, self.start_date, self.end_date) == True:
                 row["date_2m_limit"] = row["value_date"] + timedelta(days=60)
@@ -139,7 +146,7 @@ class Returns:
                 opp_df = FIFO(row, df).opp_df(opp_df)
                 row_res = row["var"]/row["curr_rate"] + row["commision"]
                 opp_df_res = (
-                    (opp_df["var"]/row["curr_rate"] + opp_df["commision"]) * opp_df["shares_effective"] / opp_df["number_orig"]
+                    (opp_df["var"]/opp_df["curr_rate"] + opp_df["commision"]) * opp_df["shares_effective"] / opp_df["number_orig"]
                 ).sum()
                 if (row_res + opp_df_res < 0) & (
                     opp_df.filter(pl.col("value_date") < row["date_2m_limit"]).shape != 
