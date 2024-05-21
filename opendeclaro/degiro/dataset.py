@@ -156,7 +156,8 @@ class Dataset:
         rest_of_data = (
             self.data.filter(
                 pl.col("id_order").is_in(unique_buy_id_orders).is_not() | 
-                ((pl.col("id_order").is_in(unique_buy_id_orders)) & ((pl.col("action") != action))))
+                (pl.col("id_order").is_in(unique_buy_id_orders) & (pl.col("action") != action))
+            )
         )
         return pl.concat([rest_of_data, unique_buy])
     # fmt:on
