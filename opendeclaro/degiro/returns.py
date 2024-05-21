@@ -1,10 +1,14 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import List, Optional
 
 import polars as pl
 from polars import DataFrame
 
-from opendeclaro.degiro.utils import filter_rowdate_inside_dates, opposite_transaction
+from opendeclaro.degiro.utils import (
+    filter_df_inside_dates,
+    filter_rowdate_inside_dates,
+    opposite_transaction,
+)
 
 
 class FIFO:
@@ -50,7 +54,7 @@ class FIFO:
                 .with_columns(
                     pl.cum_sum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
                 )
-                .filter(pl.col("pending") <= 0)
+                .filter(pl.col("pending") < 0)
                 .with_columns(
                     pl.when(abs(pl.col("pending")) > pl.col("number"))
                     .then(pl.col("number"))
@@ -65,7 +69,7 @@ class FIFO:
                 .with_columns(
                     pl.cum_sum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
                 )
-                .filter(pl.col("pending") > 0)
+                .filter(pl.col("pending") >= 0)
                 .with_columns(pl.lit(0.0).alias("shares_effective"))
             )
 
@@ -76,7 +80,7 @@ class FIFO:
                 .with_columns(
                     pl.cum_sum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending")
                 )
-                .filter(pl.col("pending") <= 0)
+                .filter(pl.col("pending") < 0)
                 .with_columns(
                     pl.when(abs(pl.col("pending")) > pl.col("number"))
                     .then(pl.col("number"))
@@ -91,7 +95,7 @@ class FIFO:
                 .with_columns(
                     pl.cum_sum("number").sub(self.row["shares_effective"]).sub(pl.col("number")).alias("pending"),
                 )
-                .filter(pl.col("pending") > 0)
+                .filter(pl.col("pending") >= 0)
                 .with_columns(pl.lit(0.0).alias("shares_effective"))
             )
 
@@ -115,7 +119,25 @@ class Returns:
         self.df = df
         self.end_date = end_date
         self.start_date  = start_date
-
+    
+    @property
+    def unique_isin(self) -> List[str]:
+        isin_list = (
+            filter_df_inside_dates(self.df, col_name="value_date", start_date=self.start_date, end_date=self.end_date)
+            .filter(pl.col("isin").str.len_bytes() > 1)
+            .select(pl.col("isin").unique())
+            .to_series()
+            .to_list()
+        )
+        return isin_list
+    
+    def return_on_all_stocks(self) -> float:
+        return_all = 0
+        for isin in self.unique_isin:
+            return_all += self.return_on_stock(isin)
+            print(isin, self.return_on_stock(isin))
+        return return_all
+    
     def return_on_stock(self, isin: str) -> float:
         """Compute the return of a given stock ISIN
 
@@ -140,7 +162,7 @@ class Returns:
                     .with_columns(pl.col("number").alias("number_orig"))
                 )
             stocks_before = self.get_stocks_purchased_before(row, df)
-            if self.choose_compute_transaction(row, stocks_before, self.start_date, self.end_date) == True:
+            if self.choose_compute_transaction(row, stocks_before) == True:
                 row["date_2m_limit"] = row["value_date"] + timedelta(days=60)
                 row["shares_effective"] = min(abs(stocks_before), row["number"])
                 opp_df = FIFO(row, df).opp_df(opp_df)
@@ -152,6 +174,8 @@ class Returns:
                     opp_df.filter(pl.col("value_date") < row["date_2m_limit"]).shape != 
                     opp_df.filter(pl.col("value_date") < row["value_date"]).shape
                 ):
+                    return_stock += 0
+                elif filter_rowdate_inside_dates(row["value_date"], self.start_date, self.end_date) == False:
                     return_stock += 0
                 else:
                     return_stock += row_res + opp_df_res
@@ -196,9 +220,7 @@ class Returns:
         return stocks_purchased_before - stocks_sold_before
     
     @staticmethod
-    def choose_compute_transaction(
-        row: dict, stocks_before: float, start_date: Optional[str] = None, end_date: Optional[str] = None
-    ) -> bool:
+    def choose_compute_transaction(row: dict, stocks_before: float) -> bool:
         """Decide whether to compute the transaction or not
 
         Parameters
@@ -207,24 +229,19 @@ class Returns:
             dictionary containing the row of a transaction of the stocks dataframe
         stocks_before : float
             number of stocks purchased (long if positive, short if negative, zero if no position)
-        start_date : Optional[str], optional
-            starting date from which valid transactions are filtered, by default None
-        end_date : Optional[str], optional
-            ending date from which valid transactions are filtered, by default None
 
         Returns
         -------
         bool
             True if return is to be computed, False otherwise
         """
-        date_inside_filter = filter_rowdate_inside_dates(row["value_date"], start_date, end_date)
         if (row["action"] == "sell") & (stocks_before <= 0):
             return False
-        if (row["action"] == "sell") & (stocks_before > 0) & (date_inside_filter is True):
+        if (row["action"] == "sell") & (stocks_before > 0):
             return True
         if (row["action"] == "buy") & (stocks_before >= 0):
             return False
-        if (row["action"] == "buy") & (stocks_before < 0)& (date_inside_filter is True):
+        if (row["action"] == "buy") & (stocks_before < 0):
             return True
 
 # fmt: on
