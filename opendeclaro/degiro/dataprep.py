@@ -82,20 +82,21 @@ class DataPrep:
             (pl.col("unintended") == True) & 
             (pl.col("desc").str.contains("CAMBIO DE ISIN"))
         )
+        df_updated_with_isin = df.with_columns(pl.lit(None).alias("isin_change"))
         for _, data in df_isin.group_by("value_date", maintain_order=True):
             for row in data.iter_rows(named=True):
                 isin_opp = data.filter(pl.col("isin")!=row["isin"]).select("isin")
-                df = df.with_columns(
+                df_updated_with_isin = df_updated_with_isin.with_columns(
                     pl.when(
                         (pl.col("isin") == row["isin"]) &
                         (pl.col("action") != row["action"]) &
                         (pl.col("value_date") > row["value_date"])
                     )
                     .then(isin_opp)
-                    .otherwise(None)
+                    .otherwise(pl.col("isin_change"))
                     .alias("isin_change")
                 )
-        return df
+        return df_updated_with_isin
 
 
 # fmt:on
