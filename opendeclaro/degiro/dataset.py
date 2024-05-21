@@ -224,33 +224,6 @@ class Dataset:
                 "price": float(split_row[1].split()[0].replace(".", "").replace(",", ".")),
                 "pricecur": split_row[1].split()[1],
             }
-        # if desc.startswith("Compra") or desc.startswith("Venta"):
-        #     split_row = desc.split("@")
-        #     return {
-        #         "action": mapping.get(split_row[0].split()[0]),
-        #         "number": float(split_row[0].split()[1]),
-        #         "price": float(split_row[1].split()[0].replace(",", ".")),
-        #         "pricecur": split_row[1].split()[1],
-        #     }
-
-        # elif desc.startswith("ESCISI"):
-        #     _desc = desc.split(": ")[1]
-        #     split_row = _desc.split("@")
-        #     return {
-        #         "action": mapping.get(split_row[0].split()[0]),
-        #         "number": float(split_row[0].split()[1]),
-        #         "price": float(split_row[1].split()[0].replace(",", ".")),
-        #         "pricecur": split_row[1].split()[1],
-        #     }
-
-        # elif desc.startswith("VENCIMIENTO"):
-        #     split_row = desc.split(": ")[1].split("@")
-        #     return {
-        #         "action": mapping.get(split_row[0].split()[0]),
-        #         "number": float(split_row[0].split()[1]),
-        #         "price": float(split_row[1].split()[0].replace(",", ".")),
-        #         "pricecur": split_row[1].split()[1],
-        #     }
         else:
             return {
                 "action": None,
