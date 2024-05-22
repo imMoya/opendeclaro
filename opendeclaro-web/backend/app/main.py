@@ -1,10 +1,15 @@
+import csv
 import json
 import os
 import random
 import shutil
 import string
 
-from app.api.utils import create_user_upload_folder, generate_random_str, process_csv
+from app.api.utils import (
+    create_user_upload_folder,
+    generate_random_str,
+    returns_from_csv,
+)
 from fastapi import APIRouter, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -37,7 +42,7 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        formatted_json = process_csv(file_path)
+        formatted_json = returns_from_csv(file_path)
         shutil.rmtree(folder_path)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
@@ -51,11 +56,6 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
         data_html += "</tr>"
 
     return templates.TemplateResponse("table.html", {"request": request, "inserted_html": data_html})
-
-
-# HTMLResponse(content=html_content)
-
-# templates.TemplateResponse("response.html", {"request": request, "formatted_json": formatted_json})
 
 
 if __name__ == "__main__":

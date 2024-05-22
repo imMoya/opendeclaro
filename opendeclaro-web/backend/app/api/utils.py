@@ -7,19 +7,13 @@ import string
 from opendeclaro import degiro
 
 
-def process_csv(data_path: str) -> str:
-    deg_data = degiro.Dataset(data_path)
-    deg_portfolio = degiro.Portfolio(deg_data.data)
-    data = []
-    for row in deg_portfolio.stock_sales.iter_rows(named=True):
-        item = {"id_order": row["id_order"]}
-        ret = deg_portfolio.return_of_sale(deg_data, row["product"], row["id_order"])
-        item["name"] = row["product"]
-        item["return"] = ret.return_value
-        item["two_month_violation"] = ret.two_month_violation
-        data.append(item)
-
-    return json.dumps(data, indent=2)
+def returns_from_csv(data_path: str) -> str:
+    data = degiro.Dataset(data_path).data
+    data_stock = degiro.DataPrep(data).stocks_orders
+    isin_summary = (
+        degiro.Returns(data_stock, start_date="01/01/2023", end_date="01/01/2024").return_on_all_stocks().isin_summary
+    )
+    return isin_summary.write_json(row_oriented=True)
 
 
 def generate_random_str(k: str = 10) -> str:

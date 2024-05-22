@@ -24,9 +24,14 @@ class Dataset:
         self.data = self.data.rename({v: k for k, v in self.data_cols.items()})
         # After handling orphan rows -> EAGER MODE ON
         self.data = self.handle_orphan_rows()
+        self.data = self.unintended_addition()
         self.data = self.merge_slot_transaction(action="buy")
         self.data = self.merge_slot_transaction(action="sell")
         self.data = self.category_addition()
+        # Change dtype and drop duplicates to avoid same transaction duplicated
+        self.data = self.replace_str_null(self.data)
+        self.data = self.change_curr_rate_dtype()
+        self.data = self.data.unique().sort("date", descending=True)
 
     @property
     def change_isin(self) -> dict:
@@ -34,7 +39,7 @@ class Dataset:
 
         Returns
         -------
-        list
+        dict
             dict containing pair of stocks names that changed isin (new isin in key, old in value)
         """
         change_isin_str = "CAMBIO DE ISIN"
@@ -61,7 +66,7 @@ class Dataset:
             pl.col(self.data_cols["product"]),
             pl.col(self.data_cols["isin"]),
             pl.col(self.data_cols["desc"]),
-            pl.col(self.data_cols["curr_rate"]),
+            pl.col(self.data_cols["curr_rate"]).cast(pl.String),
             pl.col(self.data_cols["varcur"]),
             pl.col(self.data_cols["var"]).str.replace(",", ".").cast(pl.Float32, strict=False),
             pl.col(self.data_cols["cashcur"]),
@@ -91,8 +96,8 @@ class Dataset:
         mapping = {i: i - 1 for i in orphan_data.select(pl.col("row_nr")).to_series()}
         list_del = [i for i in orphan_data.select(pl.col("row_nr")).to_series()]
         orphan_data = orphan_data.with_columns(pl.col("row_nr").map_dict(mapping))
+        orphan_data = orphan_data.with_columns(pl.col("row_nr").cast(pl.UInt32, strict=False).alias("row_nr"))
         mother_data = self.replace_null_str(self.data.with_row_count().join(orphan_data, on="row_nr", how="left"))
-
         for col_str in self.data.select(pl.col(pl.Utf8)).columns:
             mother_data = mother_data.with_columns(
                 pl.concat_str([col for col in mother_data.columns if col_str in col], separator="").alias(col_str)
@@ -100,10 +105,11 @@ class Dataset:
         mother_data = mother_data.filter(~pl.col("row_nr").is_in(list_del))
         return self.replace_str_null(mother_data[list(self.data_cols.keys())])
 
+    # fmt:off
     def merge_slot_transaction(self, action: str = "buy") -> DataFrame:
         unique_buy = (
             (
-                self.data.filter(pl.col("action") == action)
+                self.data.filter((pl.col("action") == action) & (pl.col("unintended") == False))
                 .group_by("id_order", maintain_order=True)
                 .agg(
                     pl.col("reg_date").unique().alias("reg_date_list"),
@@ -121,49 +127,82 @@ class Dataset:
                     pl.col("number").sum(),
                     pl.col("price").mean(),
                     pl.col("pricecur").unique().alias("pricecur_list"),
+                    pl.col("unintended").unique().alias("unintended_list"),
                 )
             )
             .with_columns(
-                pl.col("reg_date_list").map_elements(lambda x: x[0]).alias("reg_date"),
-                pl.col("reg_hour_list").map_elements(lambda x: x[0]).alias("reg_hour"),
-                pl.col("value_date_list").map_elements(lambda x: x[0]).alias("value_date"),
-                pl.col("date_list").map_elements(lambda x: x[0]).alias("date"),
-                pl.col("product_list").map_elements(lambda x: x[0]).alias("product"),
-                pl.col("isin_list").map_elements(lambda x: x[0]).alias("isin"),
-                pl.col("desc_list").map_elements(lambda x: x[0]).alias("desc"),
-                pl.col("curr_rate_list").map_elements(lambda x: x[0]).alias("curr_rate"),
-                pl.col("varcur_list").map_elements(lambda x: x[0]).alias("varcur"),
-                pl.col("cashcur_list").map_elements(lambda x: x[0]).alias("cashcur"),
+                pl.col("reg_date_list").map_elements(lambda x: x[0], return_dtype=pl.Datetime).alias("reg_date"),
+                pl.col("reg_hour_list").map_elements(lambda x: x[0], return_dtype=pl.Datetime).alias("reg_hour"),
+                pl.col("value_date_list").map_elements(lambda x: x[0], return_dtype=pl.Datetime).alias("value_date"),
+                pl.col("date_list").map_elements(lambda x: x[0], return_dtype=pl.Datetime).alias("date"),
+                pl.col("product_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("product"),
+                pl.col("isin_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("isin"),
+                pl.col("desc_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("desc"),
+                pl.col("curr_rate_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("curr_rate"),
+                pl.col("varcur_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("varcur"),
+                pl.col("cashcur_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("cashcur"),
                 pl.lit(action).alias("action"),
-                pl.col("pricecur_list").map_elements(lambda x: x[0]).alias("pricecur"),
+                pl.col("pricecur_list").map_elements(lambda x: x[0], return_dtype=pl.String).alias("pricecur"),
+                pl.col("unintended_list").map_elements(lambda x: x[0], return_dtype=pl.Boolean).alias("unintended"),
             )
             .select(self.data.columns)
         )
-        return pl.concat([self.data.filter(pl.col("action") != action), unique_buy], how="diagonal").sort(
-            "value_date", descending=True
+        unique_buy_id_orders = (
+            self.data.filter((pl.col("action") == action) & (pl.col("unintended") == False))
+            .select(pl.col("id_order"))
+            .to_series()
+            .to_list()
         )
-
+        rest_of_data = (
+            self.data.filter(
+                pl.col("id_order").is_in(unique_buy_id_orders).is_not() | 
+                (pl.col("id_order").is_in(unique_buy_id_orders) & (pl.col("action") != action))
+            )
+        )
+        return pl.concat([rest_of_data, unique_buy])
+    # fmt:on
     def split_description(self) -> Union[DataFrame, LazyFrame]:
         """Apply split_and_transform method to description column of data and update data_cols with new column names"""
         self.data_cols.update(
             dict(zip(["action", "number", "price", "pricecur"], ["action", "number", "price", "pricecur"]))
         )
         return self.data.with_columns(
-            pl.col(self.data_cols["desc"]).map_elements(self.split_and_transform).alias("result")
+            pl.col(self.data_cols["desc"])
+            .map_elements(self.split_and_transform, return_dtype=pl.Struct)
+            .alias("result")
         ).unnest("result")
 
     def category_addition(self) -> Union[DataFrame, LazyFrame]:
         return self.data.with_columns(
             category=pl.when(pl.col("desc").str.contains("|".join(self.options_names())))
-            .then("option")
+            .then(pl.lit("option"))
             .when((pl.col("action") == "buy") | (pl.col("action") == "sell"))
-            .then("stock")
+            .then(pl.lit("stock"))
             .when(pl.col("desc") == "Dividendo")
-            .then("dividend")
+            .then(pl.lit("dividend"))
         )
 
-    @staticmethod
-    def split_and_transform(desc: str) -> dict:
+    def unintended_addition(self) -> Union[DataFrame, LazyFrame]:
+        self.data_cols.update(dict(zip(["unintended"], ["unintended"])))
+        return self.data.with_columns(
+            unintended=pl.when(
+                ((pl.col("action") == "buy") | (pl.col("action") == "sell")) & (pl.col("id_order").str.lengths() == 0)
+            )
+            .then(True)
+            .otherwise(False)
+        )
+
+    def change_curr_rate_dtype(self):
+        self.data = self.data.with_columns(
+            pl.col("curr_rate")
+            .cast(pl.Utf8)
+            .str.replace(",", ".")
+            .cast(pl.Float32, strict=False)
+            .alias("curr_rate_float")
+        )
+        return self.data.drop("curr_rate").rename({"curr_rate_float": "curr_rate"}).drop("curr_rate_float")
+
+    def split_and_transform(self, desc: str) -> dict:
         """Split string and get dictionary with four items: action, number, price and pricecur
 
         Parameters
@@ -177,31 +216,13 @@ class Dataset:
             dictionary containing action, number, price and price currency
         """
         mapping = {"Compra": "buy", "Venta": "sell"}
-        if desc.startswith("Compra") or desc.startswith("Venta"):
-            split_row = desc.split("@")
+        if ("Compra" in desc) or ("Venta" in desc):
+            info = self.get_substring_after_colon(desc)
+            split_row = info.split("@")
             return {
                 "action": mapping.get(split_row[0].split()[0]),
-                "number": float(split_row[0].split()[1]),
-                "price": float(split_row[1].split()[0].replace(",", ".")),
-                "pricecur": split_row[1].split()[1],
-            }
-
-        elif desc.startswith("ESCISI"):
-            _desc = desc.split(": ")[1]
-            split_row = _desc.split("@")
-            return {
-                "action": mapping.get(split_row[0].split()[0]),
-                "number": float(split_row[0].split()[1]),
-                "price": float(split_row[1].split()[0].replace(",", ".")),
-                "pricecur": split_row[1].split()[1],
-            }
-
-        elif desc.startswith("VENCIMIENTO"):
-            split_row = desc.split(": ")[1].split("@")
-            return {
-                "action": mapping.get(split_row[0].split()[0]),
-                "number": float(split_row[0].split()[1]),
-                "price": float(split_row[1].split()[0].replace(",", ".")),
+                "number": float(split_row[0].split()[1].replace(".", "").replace(",", ".")),
+                "price": float(split_row[1].split()[0].replace(".", "").replace(",", ".")),
                 "pricecur": split_row[1].split()[1],
             }
         else:
@@ -227,3 +248,12 @@ class Dataset:
     @staticmethod
     def options_names() -> List[str]:
         return ["JAN2", "FEB2", "MAR2", "APR2", "JUN2", "JUL2", "AUG2", "SEP2", "OCT2", "NOV2", "DEC2"]
+
+    @staticmethod
+    def get_substring_after_colon(input_str: str):
+        if ": " in input_str:
+            index = input_str.index(": ")
+            result = input_str[index + 2 :]
+            return result
+        else:
+            return input_str
