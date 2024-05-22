@@ -1,3 +1,5 @@
+from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -9,6 +11,12 @@ from opendeclaro.degiro.utils import (
     filter_rowdate_inside_dates,
     opposite_transaction,
 )
+
+
+@dataclass
+class ReturnsGlobal:
+    isin_summary: pl.DataFrame
+    global_return: float
 
 
 class FIFO:
@@ -131,12 +139,15 @@ class Returns:
         )
         return isin_list
     
-    def return_on_all_stocks(self) -> float:
+    def return_on_all_stocks(self) -> ReturnsGlobal:
         return_all = 0
+        isin_dict = defaultdict(list)
         for isin in self.unique_isin:
-            return_all += self.return_on_stock(isin)
-            print(isin, self.return_on_stock(isin))
-        return return_all
+            return_isin = self.return_on_stock(isin)
+            isin_dict["isin"].append(isin)
+            isin_dict["return"].append(return_isin)
+            return_all += return_isin
+        return ReturnsGlobal(pl.DataFrame(isin_dict), return_all)
     
     def return_on_stock(self, isin: str) -> float:
         """Compute the return of a given stock ISIN
