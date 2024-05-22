@@ -36,9 +36,6 @@ class DataPrep:
                 "id_order", "curr_rate"
             )
         )
-        df.write_csv("datasets/Account_data.csv")
-        df_costs.write_csv("datasets/Account_costs.csv")
-        df_curr_rate.write_csv("datasets/Account_curr_rate.csv")
         df_final = df.join(df_costs, on="id_order").join(df_curr_rate, left_on="id_order", right_on="id_order", how="left").sort("date", descending=True)
         return df_final.with_columns(pl.lit(False).alias("unintended"))
     
@@ -55,7 +52,7 @@ class DataPrep:
         return df.sort("date", descending=True)
     
     @property
-    def stocks_orders(self):
+    def stocks_orders(self) -> DataFrame:
         df_stocks = self.map_eur_curr_rate(
             pl.concat(
                 [self.prepare_id_orders(),
