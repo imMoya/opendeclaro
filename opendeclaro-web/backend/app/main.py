@@ -42,12 +42,13 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        formatted_json = returns_from_csv(file_path)
+        return_isin_glob = returns_from_csv(file_path)
         shutil.rmtree(folder_path)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
 
-    data = json.loads(formatted_json)
+    # ISIN summary
+    data = json.loads(return_isin_glob.isin_summary)
     data_html = ""
     for item in data:
         data_html += "<tr>"
@@ -55,7 +56,13 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
             data_html += f"<td>{value}</td>"
         data_html += "</tr>"
 
-    return templates.TemplateResponse("table.html", {"request": request, "inserted_html": data_html})
+    # Global Return
+    data_global = f"<td>{return_isin_glob.global_result}</td>"
+
+    return templates.TemplateResponse(
+        "table.html",
+        {"request": request, "inserted_html": data_html, "inserted_html_2": data_global},
+    )
 
 
 if __name__ == "__main__":
